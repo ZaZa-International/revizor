@@ -1,0 +1,130 @@
+[project]
+name = "mgts-infra-backend"
+version = "0.1.0"
+description = "MGTS Infrastructure Intelligence - backend for drive-by telecom infrastructure inspection"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "fastapi>=0.163,<0.164",
+    "uvicorn[standard]>=0.54,<0.55",
+    "pydantic>=2.14,<3",
+    "pydantic-settings>=2.16,<3",
+    "sqlalchemy[asyncio]>=2.1,<2.2",
+    "asyncpg>=0.32,<0.33",
+    "geoalchemy2>=0.21,<0.22",
+    "alembic>=1.20,<2",
+    "redis>=8.1,<9",
+    "rq>=3.0,<4",
+    "boto3>=1.44,<2",
+    "structlog>=26.1,<27",
+    "prometheus-client>=0.26,<0.27",
+    "opencv-python-headless>=5.0,<5.1",
+    "openpyxl>=3.1,<4",
+    "argon2-cffi>=25.1,<26",
+    "pyjwt>=2.15,<3",
+    "python-multipart>=0.0.33,<0.1",
+    "httpx>=0.28,<0.29",
+    "shapely>=2.0,<3",
+    "opentelemetry-api>=1.30,<2",
+    "opentelemetry-sdk>=1.30,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.30,<2",
+    "opentelemetry-instrumentation-fastapi>=0.60b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.60b0",
+    "opentelemetry-instrumentation-httpx>=0.60b0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2,<10",
+    "pytest-asyncio>=1.5,<2",
+    "pytest-cov>=7.1,<8",
+    "httpx>=0.28,<0.29",
+    "jsonschema>=4.26,<5",
+    "ruff>=0.17,<0.18",
+    "mypy>=2.4,<3",
+    "pre-commit>=4.7,<5",
+    "pip-audit>=2.10,<3",
+    "boto3-stubs[s3]>=1.44",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["app", "tests"]
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "ASYNC", "S"]
+ignore = [
+    "S101",
+    "B008",
+    "RUF012",
+    "S104",
+    "UP046",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S107", "S311", "S603", "S607"]
+"scripts/**" = ["S603", "S607", "S311"]
+"app/infrastructure/ml/mock_provider.py" = ["S311"]
+"app/config.py" = ["S105"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+exclude = ["migrations/versions"]
+
+[[tool.mypy.overrides]]
+module = [
+    "cv2.*",
+    "geoalchemy2.*",
+    "rq.*",
+    "boto3.*",
+    "botocore.*",
+    "shapely.*",
+    "prometheus_client.*",
+    "openpyxl.*",
+    "opentelemetry.*",
+]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "unit: pure unit tests, no external services",
+    "integration: requires PostgreSQL/PostGIS, Redis, storage",
+    "api: API-level tests against real database",
+    "contract: ML/frontend contract tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:botocore.*",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/workers/worker.py"]
+
+[tool.coverage.report]
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]

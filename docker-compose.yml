@@ -1,0 +1,124 @@
+name: mgts-infra
+
+x-backend-common: &backend-common
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  image: mgts-infra-backend:local
+  restart: unless-stopped
+  env_file:
+    - path: .env
+      required: false
+  environment: &backend-env
+    DATABASE_URL: postgresql+asyncpg://mgts:mgts@db:5432/mgts_infra
+    REDIS_URL: redis://redis:6379/0
+    S3_ENDPOINT_URL: http://s3:9000
+  depends_on: &backend-depends
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    s3:
+      condition: service_healthy
+    s3-init:
+      condition: service_completed_successfully
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mgts
+      POSTGRES_PASSWORD: mgts
+      POSTGRES_DB: mgts_infra
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mgts -d mgts_infra"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # S3-compatible object storage. MinIO community images/binaries are no longer
+  # publicly distributed (Docker Hub repo removed, dl.min.io returns 410), so the
+  # dev/demo environment uses SeaweedFS behind the same S3 API. See ADR-0006.
+  s3:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    command: >
+      server -dir=/data -volume.max=0 -master.volumeSizeLimitMB=256
+      -filer -s3 -s3.port=9000 -ip.bind=0.0.0.0
+    ports:
+      - "9000:9000"
+      - "9333:9333"
+    volumes:
+      - s3data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9000/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  s3-init:
+    image: amazon/aws-cli:latest
+    restart: "no"
+    depends_on:
+      s3:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-minioadmin}
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-mgts-infra}
+    entrypoint: >
+      /bin/sh -c "aws --endpoint-url http://s3:9000 s3 mb s3://$${S3_BUCKET} || true"
+
+  backend:
+    <<: *backend-common
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    <<: *backend-common
+    command: python -m app.workers.worker
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os, redis; redis.Redis.from_url(os.environ['REDIS_URL']).ping()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  pgdata:
+  redisdata:
+  s3data:

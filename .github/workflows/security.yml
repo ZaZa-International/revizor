@@ -1,0 +1,33 @@
+name: security
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # Строгий режим: любая известная уязвимость в зависимостях роняет job
+      # (continue-on-error: false). Исключений для "неисправленных" уязвимостей нет —
+      # см. docs/operations/deployment.md, раздел "Аудит зависимостей".
+      - name: Audit dependencies
+        run: uv run pip-audit
