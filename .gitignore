@@ -34,3 +34,7 @@ backend/var/
 
 # Docker (локальные артефакты)
 docker-compose.override.yml
+
+# Артефакты браузерных проверок
+.playwright-mcp/
+*.png
