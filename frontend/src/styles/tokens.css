@@ -1,0 +1,91 @@
+/* REVIZOR design tokens. Единственный источник цветов/типографики/ритма.
+   Контрасты проверены расчётом (docs/design-system.md). */
+:root {
+  /* Поверхности (тёмная рабочая среда) */
+  --bg: #091318;
+  --surface: #102129;
+  --raised: #1c3038;
+  --overlay: #0c1a21;
+  --line: #24404a;
+  --line-soft: #1a313a;
+  --control-border: #55707a;
+
+  /* Текст */
+  --ink: #e9eee9;
+  --muted: #a0b3b5;
+  --faint: #7d959b;
+
+  /* Семантика */
+  --accent: #75d7cc;
+  --accent-dim: #3d8a81;
+  --accent-ink: #06231f;
+  --accent-soft: rgba(117, 215, 204, 0.12);
+  --ok: #9dbfa8;
+  --ok-soft: rgba(157, 191, 168, 0.14);
+  --warn: #f0a45c;
+  --warn-soft: rgba(240, 164, 92, 0.14);
+  --crit: #e66c61;
+  --crit-soft: rgba(230, 108, 97, 0.14);
+  --info-soft: rgba(160, 179, 181, 0.12);
+
+  /* Редакционная светлая сцена */
+  --paper: #f2f3ef;
+  --paper-raised: #e9ebe4;
+  --paper-ink: #14232b;
+  --paper-muted: #4e6268;
+  --paper-line: #d3d8cf;
+  --paper-accent: #0e6e62;
+  --paper-accent-soft: rgba(14, 110, 98, 0.1);
+
+  /* Типографика */
+  --font-display: 'Oswald', 'Arial Narrow', sans-serif;
+  --font-ui: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+  --text-hero: clamp(44px, 7.2vw, 108px);
+  --text-scene: clamp(30px, 4.4vw, 58px);
+  --text-title: 26px;
+  --text-h3: 17px;
+  --text-body: 15px;
+  --text-small: 13px;
+  --text-micro: 11px;
+
+  /* Ритм */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-24: 96px;
+
+  /* Формы */
+  --radius-s: 3px;
+  --radius-m: 5px;
+  --radius-l: 7px;
+  --shadow-overlay: 0 12px 40px rgba(2, 8, 11, 0.55);
+  --rail-w: 232px;
+  --topbar-h: 60px;
+  --content-max: 1480px;
+
+  /* Движение */
+  --dur-micro: 180ms;
+  --dur-swap: 240ms;
+  --dur-enter: 550ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-micro: 0ms;
+    --dur-swap: 0ms;
+    --dur-enter: 0ms;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
