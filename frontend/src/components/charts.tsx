@@ -61,7 +61,9 @@ export function ColumnChart({
   const peak = Math.max(1, ...data.map((d) => d.value));
   const ticks = [0, 0.5, 1].map((t) => Math.round(peak * t));
   const w = 100;
-  const bw = w / Math.max(1, data.length);
+  const gl = 12;
+  const plotW = w - gl;
+  const bw = plotW / Math.max(1, data.length);
   return (
     <figure style={{ margin: 0 }}>
       <svg viewBox={`0 0 ${w} ${height}`} style={{ width: '100%', height }} role="img" aria-label={ariaLabel} preserveAspectRatio="none">
@@ -69,8 +71,8 @@ export function ColumnChart({
           const y = height - 22 - (t / peak) * (height - 34);
           return (
             <g key={i}>
-              <line x1={0} x2={w} y1={y} y2={y} stroke="var(--line-soft)" strokeWidth={0.4} />
-              <text x={1} y={y - 1.5} fontSize={4.4} fill="var(--faint)" fontFamily="var(--font-mono)">
+              <line x1={gl} x2={w} y1={y} y2={y} stroke="var(--line-soft)" strokeWidth={0.4} />
+              <text x={gl - 2} y={y - 1.5} fontSize={4.4} fill="var(--faint)" fontFamily="var(--font-mono)" textAnchor="end">
                 {fmtNumber(t)}
               </text>
             </g>
@@ -78,14 +80,14 @@ export function ColumnChart({
         })}
         {data.map((d, i) => {
           const h = (d.value / peak) * (height - 34);
-          const x = i * bw + bw * 0.18;
+          const x = gl + i * bw + bw * 0.18;
           return (
             <g key={`${gid}-${d.key}`}>
               <rect x={x} y={height - 22 - h} width={bw * 0.64} height={Math.max(0.5, h)} fill={d.color ?? 'var(--accent)'} rx={0.8} />
-              <text x={i * bw + bw / 2} y={height - 12} fontSize={4.6} fill="var(--muted)" textAnchor="middle" fontFamily="var(--font-mono)">
+              <text x={gl + i * bw + bw / 2} y={height - 12} fontSize={4.6} fill="var(--muted)" textAnchor="middle" fontFamily="var(--font-mono)">
                 {d.label}
               </text>
-              <text x={i * bw + bw / 2} y={height - 25 - h} fontSize={4.6} fill="var(--ink)" textAnchor="middle" fontFamily="var(--font-mono)">
+              <text x={gl + i * bw + bw / 2} y={height - 25 - h} fontSize={4.6} fill="var(--ink)" textAnchor="middle" fontFamily="var(--font-mono)">
                 {d.value > 0 ? fmtNumber(d.value) : ''}
               </text>
             </g>

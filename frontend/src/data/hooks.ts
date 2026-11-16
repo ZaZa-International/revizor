@@ -46,13 +46,14 @@ async function live<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /* ── Analytics ─────────────────────────────────────── */
-export function useAnalyticsOverview() {
+export function useAnalyticsOverview(options?: Partial<UseQueryOptions<AnalyticsOverview>>) {
   const { mode } = useDataSource();
   return useQuery({
     queryKey: ['analytics-overview', mode],
     queryFn: () =>
       mode === 'demo' ? demoProvider.analyticsOverview() : live(() => unwrap(api.GET('/api/v1/analytics/overview'))),
     staleTime: 30_000,
+    ...options,
   });
 }
 
@@ -470,7 +471,7 @@ export function useCreateRoute() {
 }
 
 /* ── Map layers ────────────────────────────────────── */
-export function useMapAssets(params: Q = {}) {
+export function useMapAssets(params: Q = {}, options?: Partial<UseQueryOptions<AssetMapCollection>>) {
   const { mode } = useDataSource();
   const q = clean(params);
   return useQuery({
@@ -480,10 +481,11 @@ export function useMapAssets(params: Q = {}) {
         ? demoProvider.mapAssets(q)
         : live(() => unwrap(api.GET('/api/v1/map/assets', { params: { query: q as never } }))),
     staleTime: 30_000,
+    ...options,
   });
 }
 
-export function useMapDefects(params: Q = {}) {
+export function useMapDefects(params: Q = {}, options?: Partial<UseQueryOptions<DefectMapCollection>>) {
   const { mode } = useDataSource();
   const q = clean(params);
   return useQuery({
@@ -493,6 +495,7 @@ export function useMapDefects(params: Q = {}) {
         ? demoProvider.mapDefects(q)
         : live(() => unwrap(api.GET('/api/v1/map/defects', { params: { query: q as never } }))),
     staleTime: 30_000,
+    ...options,
   });
 }
 
@@ -509,7 +512,7 @@ export function useMapObservations(params: Q = {}) {
   });
 }
 
-export function useMapRoutes() {
+export function useMapRoutes(options?: Partial<UseQueryOptions<RouteMapCollection>>) {
   const { mode } = useDataSource();
   return useQuery({
     queryKey: ['map-routes', mode],
@@ -518,6 +521,7 @@ export function useMapRoutes() {
         ? demoProvider.mapRoutes()
         : live(() => unwrap(api.GET('/api/v1/map/routes'))),
     staleTime: 60_000,
+    ...options,
   });
 }
 

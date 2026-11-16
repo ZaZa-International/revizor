@@ -447,11 +447,13 @@
 }
 
 .table .cell-main {
+  display: block;
   font-weight: 500;
   color: var(--ink);
 }
 
 .table .cell-sub {
+  display: block;
   font-size: var(--text-micro);
   color: var(--faint);
   margin-top: 2px;

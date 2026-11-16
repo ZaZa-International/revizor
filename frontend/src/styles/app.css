@@ -244,6 +244,73 @@
   max-width: 340px;
 }
 
+/* ── Assets: карточки вместо таблицы на мобильном ──── */
+.assets-cards {
+  display: none;
+}
+
+.asset-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  width: 100%;
+  text-align: left;
+  padding: var(--sp-4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-m);
+  background: var(--bg);
+  transition:
+    border-color var(--dur-micro) var(--ease-out),
+    background-color var(--dur-micro) var(--ease-out);
+}
+
+.asset-card:hover {
+  border-color: var(--control-border);
+  background: var(--raised);
+}
+
+.asset-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.asset-card-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.asset-card-name {
+  display: block;
+  font-weight: 500;
+  font-size: var(--text-small);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.asset-card-id {
+  display: block;
+  font-size: var(--text-micro);
+  color: var(--faint);
+  margin-top: 2px;
+}
+
+.asset-card-priority {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.asset-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+  align-items: center;
+}
+
+.asset-card-foot {
+  font-size: var(--text-micro);
+}
+
 /* ── Overview ──────────────────────────────────────── */
 .kpi-strip {
   display: grid;
@@ -789,6 +856,43 @@
   font-size: 10px;
 }
 
+/* ── MapLibre zoom control: тёмная тема ────────────── */
+.maplibregl-ctrl.maplibregl-ctrl-group {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.maplibregl-ctrl.maplibregl-ctrl-group:not(:empty) {
+  box-shadow: none;
+}
+
+.maplibregl-ctrl.maplibregl-ctrl-group button {
+  width: 30px;
+  height: 30px;
+  background-color: transparent;
+}
+
+.maplibregl-ctrl.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--line-soft);
+}
+
+.maplibregl-ctrl.maplibregl-ctrl-group button:hover {
+  background-color: var(--raised);
+}
+
+.maplibregl-ctrl.maplibregl-ctrl-group button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon,
+.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
+  filter: invert(1);
+}
+
 /* ── Адаптив ───────────────────────────────────────── */
 @media (max-width: 1200px) {
   .map-workspace {
@@ -930,5 +1034,21 @@
   }
   .attention-item .att-main {
     flex-basis: calc(100% - 40px);
+  }
+}
+
+@media (max-width: 768px) {
+  .assets-page .table-wrap {
+    display: none;
+  }
+  .assets-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+  }
+  .assets-page .filter-bar .search {
+    flex: 1 1 100%;
+    max-width: none;
   }
 }
