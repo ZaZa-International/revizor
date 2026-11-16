@@ -149,7 +149,7 @@ report.map = await page.evaluate(() => {
 });
 const tileRequests = [];
 page.on('response', (r) => {
-  if (r.url().includes('basemaps.cartocdn.com')) tileRequests.push(r.status());
+  if (r.url().includes('server.arcgisonline.com')) tileRequests.push(r.status());
 });
 await page.waitForTimeout(2500);
 report.map.tileStatuses = tileRequests.slice(0, 12);

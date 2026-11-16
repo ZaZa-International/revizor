@@ -60,7 +60,7 @@ intelligence (сеть, координаты, слои), infrastructure operatio
   после reviews/PATCH, retry-политика по кодам ошибок контракта.
 - **react-router v6** — `/` showcase, `/app/*` nested routes, прямые URL и reload.
 - **MapLibre GL JS** — backend отдаёт GeoJSON «для MapLibre» (контракт §5).
-  Без API-ключей. Тёмный raster-basemap (CARTO dark, attribution) + локальный
+  Без API-ключей. Тёмный raster-basemap (Esri World Dark Gray, attribution) + локальный
   интерактивный SVG-fallback (офлайн/отказ WebGL) с теми же данными.
 - **GSAP + ScrollTrigger** (npm, free license) — scrub-сцены showcase.
 - **SVG-графики собственной реализации** — распределения, sparklines, timeline,

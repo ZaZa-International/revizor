@@ -28,7 +28,7 @@ test.describe('Надёжность и fallback', () => {
   });
 
   test('отказ тайлов basemap → schematic fallback', async ({ page }) => {
-    await page.route('**/basemaps.cartocdn.com/**', (route) => route.abort());
+    await page.route('**/server.arcgisonline.com/**', (route) => route.abort());
     await enterDemo(page);
     await page.goto('/app/map');
     await page.waitForTimeout(6000);
@@ -128,7 +128,7 @@ test.describe('Надёжность и fallback', () => {
     await page.goto('/app/map');
     await page.waitForTimeout(4500);
     const tiles = await page.evaluate(() =>
-      performance.getEntriesByType('resource').filter((r) => r.name.includes('basemaps.cartocdn.com')).length,
+      performance.getEntriesByType('resource').filter((r) => r.name.includes('server.arcgisonline.com')).length,
     );
     const canvas = await page.locator('.map-canvas canvas').count();
     if (canvas > 0) expect(tiles).toBeGreaterThan(0);

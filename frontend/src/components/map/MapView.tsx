@@ -33,18 +33,28 @@ export const BAND_COLORS: Record<string, string> = {
 const BASEMAP_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    carto: {
+    esriBase: {
       type: 'raster',
       tiles: [
-        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
       ],
       tileSize: 256,
-      attribution: '© CARTO · © OpenStreetMap contributors',
+      maxzoom: 16,
+      attribution: '© Esri · HERE · Garmin · FAO · NOAA · USGS',
+    },
+    esriLabels: {
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      maxzoom: 16,
     },
   },
-  layers: [{ id: 'carto-base', type: 'raster', source: 'carto' }],
+  layers: [
+    { id: 'esri-base', type: 'raster', source: 'esriBase' },
+    { id: 'esri-labels', type: 'raster', source: 'esriLabels' },
+  ],
 };
 
 const EMPTY: maplibregl.GeoJSONSourceSpecification['data'] = { type: 'FeatureCollection', features: [] };

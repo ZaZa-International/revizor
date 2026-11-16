@@ -96,7 +96,7 @@ export default function ShowcasePage() {
             референс исполнения
           </a>
           <br />
-          Карта: © CARTO · © OpenStreetMap contributors.
+          Карта: © Esri · HERE · Garmin · FAO · NOAA · USGS.
         </div>
       </footer>
     </div>

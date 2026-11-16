@@ -67,7 +67,7 @@ e2e/              showcase / app-demo / app-live (@live) / responsive / robustne
 
 ### Карта
 
-MapLibre GL: тёмный raster basemap (CARTO dark, attribution), GeoJSON-слои
+MapLibre GL: тёмный raster basemap (Esri World Dark Gray, без API-ключа, attribution), GeoJSON-слои
 assets (кластеризация) / defects (кольца) / observations / routes, selection,
 popup, fitBounds. Fallback при отказе WebGL или >8 ошибках тайлов →
 интерактивная SVG-схема с координатной сеткой (без выдуманной географии),

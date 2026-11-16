@@ -27,9 +27,9 @@ https://openfontlicense.org/open-font-license-official-text/
 
 ## Геоданные и демо
 
-- Базовая карта: raster-тайлы CARTO dark (`basemaps.cartocdn.com`),
-  © CARTO, © OpenStreetMap contributors. Используются только в live-карте
-  с атрибуцией; при недоступности — локальный схематичный SVG-режим
+- Базовая карта: raster-тайлы Esri World Dark Gray (`server.arcgisonline.com`),
+  © Esri, HERE, Garmin, FAO, NOAA, USGS. Бесплатно, без API-ключа. Используются
+  только в live-карте с атрибуцией; при недоступности — локальный схематичный SVG-режим
   (координатная сетка, без выдуманной географии).
 - Демо-датасет `src/demo/` — синтетический, детерминированный, координаты
   условны (центр Москвы как демонстрационная зона). Маркируется DEMO в интерфейсе.

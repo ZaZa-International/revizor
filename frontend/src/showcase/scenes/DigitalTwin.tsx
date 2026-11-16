@@ -124,7 +124,7 @@ export default function DigitalTwin() {
           </div>
 
           <p className="faint" style={{ fontSize: 'var(--text-micro)' }}>
-            Базовая карта: © CARTO · © OpenStreetMap contributors. При недоступности тайлов карта
+            Базовая карта: © Esri · HERE · Garmin · FAO · NOAA · USGS. При недоступности тайлов карта
             переходит в схематичный режим с координатной сеткой.
           </p>
         </div>
