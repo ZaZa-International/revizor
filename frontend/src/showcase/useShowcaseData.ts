@@ -3,15 +3,17 @@ import { useAuth } from '../api/auth';
 import { useAnalyticsOverview, useMapAssets, useMapRoutes, useObservations } from '../data/hooks';
 import { demoProvider } from '../demo/provider';
 
-/* Данные showcase: живые при наличии сессии, иначе явно.demo-сценарий. */
+/* Данные showcase: живые при наличии сессии, иначе явно demo-сценарий.
+   Без сессии live-хуки отключены (enabled: live), чтобы не делать
+   авторизованных запросов и не получать 401 в консоли. */
 export function useShowcaseData() {
   const { session } = useAuth();
   const live = !!session;
 
-  const liveOverview = useAnalyticsOverview();
-  const liveAssets = useMapAssets({ limit: 500 });
-  const liveRoutes = useMapRoutes();
-  const liveQueue = useObservations({ review_status: 'UNREVIEWED', page_size: 1 });
+  const liveOverview = useAnalyticsOverview({ enabled: live });
+  const liveAssets = useMapAssets({ limit: 500 }, { enabled: live });
+  const liveRoutes = useMapRoutes({ enabled: live });
+  const liveQueue = useObservations({ review_status: 'UNREVIEWED', page_size: 1 }, { enabled: live });
 
   const demoOverview = useQuery({ queryKey: ['showcase-demo-overview'], queryFn: () => demoProvider.analyticsOverview(), enabled: !live, staleTime: Infinity });
   const demoAssets = useQuery({ queryKey: ['showcase-demo-assets'], queryFn: () => demoProvider.mapAssets({}), enabled: !live, staleTime: Infinity });

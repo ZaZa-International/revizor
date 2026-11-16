@@ -63,7 +63,7 @@ export default function AssetsPage() {
   );
 
   return (
-    <div>
+    <div className="assets-page">
       <div className="page-head">
         <div>
           <p className="eyebrow">Реестр</p>
@@ -163,6 +163,39 @@ export default function AssetsPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+            <div className="assets-cards">
+              {query.data.items.map((a) => {
+                const Icon = assetTypeIcon(a.asset_type);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    className="asset-card"
+                    onClick={() => navigate(`/app/assets/${a.id}`)}
+                  >
+                    <span className="asset-card-head">
+                      <Icon style={{ color: 'var(--muted)' }} />
+                      <span className="asset-card-titles">
+                        <span className="asset-card-name">{a.display_name ?? a.external_id ?? a.id.slice(0, 8)}</span>
+                        <span className="asset-card-id mono">{a.external_id ?? a.id.slice(0, 8)} · {label.assetTypeShort(a.asset_type)}</span>
+                      </span>
+                      <span className="num asset-card-priority" title="Текущий приоритет">{fmtNumber(a.current_priority, 0)}</span>
+                    </span>
+                    <span className="asset-card-meta">
+                      <Status tone={conditionTone(a.current_condition)}>{label.condition(a.current_condition)}</Status>
+                      <Severity value={a.current_severity} />
+                      <Badge tone={bandTone[a.priority_band ?? ''] === 'crit' ? 'crit' : bandTone[a.priority_band ?? ''] === 'warn' ? 'warn' : undefined}>
+                        {label.priorityBand(a.priority_band).replace(' приоритет', '')}
+                      </Badge>
+                      <Status tone={geoTone[a.geolocation_status] ?? 'neutral'} shape="square">
+                        {label.geoStatus(a.geolocation_status)}
+                      </Status>
+                    </span>
+                    <span className="asset-card-foot muted">Осмотр: {fmtRelative(a.last_observed_at)}</span>
+                  </button>
+                );
+              })}
             </div>
             <Pagination
               page={query.data.page}

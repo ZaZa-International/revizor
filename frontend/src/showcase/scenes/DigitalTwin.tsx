@@ -22,9 +22,9 @@ export default function DigitalTwin() {
   const [mountRef, near] = useNearViewport<HTMLDivElement>('500px');
   const headRef = useReveal<HTMLDivElement>();
 
-  const liveAssets = useMapAssets({ limit: 1000 });
-  const liveDefects = useMapDefects({});
-  const liveRoutes = useMapRoutes();
+  const liveAssets = useMapAssets({ limit: 1000 }, { enabled: live });
+  const liveDefects = useMapDefects({}, { enabled: live });
+  const liveRoutes = useMapRoutes({ enabled: live });
 
   const demoAssets = useQuery({ queryKey: ['showcase-demo-assets'], queryFn: () => demoProvider.mapAssets({}), enabled: !live, staleTime: Infinity });
   const demoDefects = useQuery({ queryKey: ['showcase-demo-defects'], queryFn: () => demoProvider.mapDefects({}), enabled: !live, staleTime: Infinity });
