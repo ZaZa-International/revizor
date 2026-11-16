@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "not_found",
+    "message": "Asset '8f4a2b1c-9d3e-4f5a-8b7c-6d5e4f3a2b1c' not found",
+    "details": [],
+    "request_id": "a1b2c3d4-1111-4222-8333-444455556666"
+  }
+}

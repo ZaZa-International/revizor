@@ -1,0 +1,14 @@
+{
+  "error": {
+    "code": "validation_error",
+    "message": "Request validation failed",
+    "details": [
+      {
+        "field": "query.page_size",
+        "message": "Input should be less than or equal to 100",
+        "type": "less_than_equal"
+      }
+    ],
+    "request_id": "b2c3d4e5-2222-4333-9444-555566667777"
+  }
+}

@@ -53,6 +53,21 @@ docker run --rm --network mgts-infra_default amazon/aws-cli --endpoint-url http:
 Убедитесь, что `S3_BUCKET` в `.env` совпадает с тем, что создаёт `s3-init`,
 а `S3_ENDPOINT_URL` указывает на работающий S3-сервис (`s3` в compose).
 
+## Изображения не открываются в браузере (presigned URL с host `s3`)
+
+Симптом: API отдаёт `image_url`/`crop_url` вида `http://s3:9000/...`,
+браузер не может открыть ссылку (host недостижим).
+
+Причина: presigned-ссылка подписывается по internal endpoint
+(`S3_ENDPOINT_URL=http://s3:9000`); SigV4 подписывает Host, поэтому переписать
+host на клиенте нельзя — подпись сломается.
+
+Решение (0.2.0): задайте `S3_PUBLIC_ENDPOINT_URL` — публичный адрес S3 для
+presign (в dev-override — `http://localhost:9000`, в production — публичный
+URL S3/reverse proxy). Backend использует отдельный client для presign;
+внутренние операции остаются на `S3_ENDPOINT_URL`. Подробности —
+[storage.md](../integrations/storage.md).
+
 ## Alembic: connection refused / could not connect to server
 
 Симптом: `uv run alembic upgrade head` или старт backend падает с
@@ -89,6 +104,45 @@ docker run --rm --network mgts-infra_default amazon/aws-cli --endpoint-url http:
 6. После правки кода воркер нужно перезапустить: `docker compose restart worker`
    (hot reload у воркера нет).
 
+## Зависший PROCESSING job (runbook)
+
+Симптом: job долго висит в `PROCESSING` (или `QUEUED`), прогресс не движется;
+типично после деплоя/OOM/рестарта воркера посреди видео.
+
+**Автовосстановление (0.2.0).** Stale-sweeper в воркере (при старте и
+периодически) переводит `PROCESSING`/`QUEUED` job'ы, у которых
+`updated_at < now() - (RQ_JOB_TIMEOUT + STALE_JOB_GRACE_SECONDS)` (по умолчанию
+1800 + 120 = **1920 с**) и мертво RQ-исполнение, в `FAILED` с кодом
+`stale_processing`/`stale_queued`. После этого job можно повторить обычным
+`POST /api/v1/jobs/{id}/retry` — обработанные кадры не переобрабатываются
+(идемпотентность по `(job_id, frame_index)` и `detection_id`).
+
+**Вручную, не дожидаясь sweeper'а:**
+
+1. Убедитесь, что исполнение действительно мертво: логи воркера
+   (`docker compose logs --tail=200 worker`), метрики воркера
+   (`http://<worker>:9100/metrics`, порт `WORKER_METRICS_PORT`), длина очереди
+   `docker compose exec redis redis-cli LLEN rq:queue:processing`.
+2. Если job **stale** (давно не обновлялся, воркер мёртв/перезапущен) —
+   в 0.2.0 `POST /api/v1/jobs/{id}/retry` разрешён напрямую для stale
+   `PROCESSING` (безопасно благодаря fencing: advisory-lock на job не даст
+   двум исполнениям работать параллельно).
+3. Если job ещё **жив** (прогресс идёт) — не трогайте его. Для принудительной
+   остановки: `POST /api/v1/jobs/{id}/cancel` (кооперативная отмена, проверка
+   каждые 10 кадров), дождитесь `CANCELLED`, затем `retry`.
+4. Повторный запуск идемпотентен: `PROCESSED` кадры пропускаются, дубли
+   observation/asset не создаются.
+
+Смежное:
+
+- при краше воркера посреди кадра статус кадра не понижается
+  (`PROCESSED` никогда не перезаписывается в `FAILED`);
+- **план (волна 3):** `stop_grace_period` воркера в compose будет увеличен
+  (сейчас Docker убивает контейнер через 10 с после SIGTERM — warm shutdown
+  RQ не успевает); до этого полагайтесь на sweeper как backstop;
+- Redis с RDB-only persistence может потерять очередь при краше — job'ы
+  останутся `QUEUED` без RQ-исполнения; их также подберёт stale-sweeper.
+
 ## Ошибки OpenCV (libGL / libgthread / libgomp)
 
 Симптом: `ImportError: libGL.so.1: cannot open shared object file` или
@@ -114,8 +168,17 @@ docker compose logs --tail=100 backend worker
 
 Частые причины:
 
-- `JWT_SECRET_KEY must be set in production` — задан `APP_ENV=production` без
-  `JWT_SECRET_KEY`; сгенерируйте: `openssl rand -hex 32`.
+- Ошибки валидатора конфигурации в production (0.2.0) — backend/worker не
+  стартуют, в логах `ValidationError`:
+  - `JWT_SECRET_KEY must be set to a strong random value...` — пустой или
+    placeholder-секрет (`change-me*`); сгенерируйте: `openssl rand -hex 32`;
+  - `JWT_SECRET_KEY must be at least 32 characters...` — слишком короткий секрет;
+  - `BOOTSTRAP_ADMIN_PASSWORD must be empty ... or a strong value (>=12 chars...)`
+    — placeholder/короткий bootstrap-пароль; задайте сильный или очистите;
+  - `Default S3 credentials are not allowed in production` — остались
+    `minioadmin`; задайте реальные ключи S3;
+  - `QUEUE_MODE=inline is not allowed in production` — верните `rq`;
+  - `CORS_ORIGINS must not contain '*'...` — перечислите явные origin'ы.
 - Миграции не применяются (см. раздел про Alembic) — backend стартует только
   после успешного `alembic upgrade head`.
 - `s3-init` не завершился успешно — backend/worker ждут его

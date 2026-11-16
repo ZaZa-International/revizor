@@ -23,7 +23,7 @@ _BASE_DB_URL = os.environ.get(
     "DATABASE_URL", "postgresql+asyncpg://mgts:mgts@localhost:5432/mgts_infra"
 )
 _parsed = urlparse(_BASE_DB_URL)
-TEST_DB_NAME = "mgts_infra_test"
+TEST_DB_NAME = os.environ.get("TEST_DB_NAME", "mgts_infra_test")
 TEST_DB_URL = urlunparse(_parsed._replace(path=f"/{TEST_DB_NAME}"))
 SERVER_DB_URL = urlunparse(_parsed._replace(path="/postgres"))
 
@@ -38,6 +38,7 @@ os.environ["JWT_SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["BOOTSTRAP_ADMIN_USERNAME"] = "admin"
 os.environ["BOOTSTRAP_ADMIN_PASSWORD"] = "admin-test-password"
 os.environ["RATE_LIMIT_LOGIN_PER_MINUTE"] = "10000"
+os.environ["RATE_LIMIT_LOGIN_PER_USERNAME_PER_MINUTE"] = "10000"
 os.environ["RATE_LIMIT_UPLOAD_PER_MINUTE"] = "10000"
 os.environ["LOG_FORMAT"] = "console"
 os.environ["LOG_LEVEL"] = "WARNING"
@@ -99,12 +100,21 @@ async def database(settings: Settings, prepare_database: None) -> AsyncIterator[
 
 
 @pytest.fixture(autouse=True)
-async def clean_tables(request: pytest.FixtureRequest) -> AsyncIterator[None]:
+def _infra_setup(request: pytest.FixtureRequest) -> None:
+    """Resolve async infra fixtures OUTSIDE the event loop (pytest-asyncio 1.5
+    cannot nest runners via getfixturevalue inside a running loop)."""
+    if request.node.get_closest_marker("unit"):
+        return
+    request.getfixturevalue("prepare_database")
+    request.getfixturevalue("database")
+
+
+@pytest.fixture(autouse=True)
+async def clean_tables(request: pytest.FixtureRequest, _infra_setup: None) -> AsyncIterator[None]:
     if request.node.get_closest_marker("unit"):
         yield
         return
     database = request.getfixturevalue("database")
-    request.getfixturevalue("prepare_database")
     from sqlalchemy import text
 
     async with database.session() as session:

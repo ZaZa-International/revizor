@@ -9,10 +9,12 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -38,6 +40,24 @@ class ProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("processed_frames >= 0", name="processed_frames_nonneg"),
         CheckConstraint("failed_frames >= 0", name="failed_frames_nonneg"),
         CheckConstraint("rejected_frames >= 0", name="rejected_frames_nonneg"),
+        CheckConstraint(
+            "processed_frames + rejected_frames + failed_frames <= total_frames",
+            name="frames_sum",
+        ),
+        Index("ix_processing_jobs_created_at", "created_at"),
+        Index(
+            "uq_processing_jobs_active_upload",
+            "upload_id",
+            unique=True,
+            postgresql_where=text("status IN ('PENDING', 'QUEUED', 'PROCESSING')"),
+        ),
+        Index(
+            "uq_processing_jobs_idempotency_upload",
+            "idempotency_key",
+            "upload_id",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
     )
 
     upload_id: Mapped[uuid.UUID] = mapped_column(
@@ -61,7 +81,7 @@ class ProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    idempotency_key: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     rq_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     options: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
@@ -79,7 +99,7 @@ class JobFrame(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __table_args__ = (UniqueConstraint("job_id", "frame_index", name="uq_job_frame_index"),)
 
     job_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("processing_jobs.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("processing_jobs.id", ondelete="CASCADE"), nullable=False
     )
     frame_index: Mapped[int] = mapped_column(Integer, nullable=False)
     stored_file_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -91,5 +111,6 @@ class JobFrame(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     reject_reason: Mapped[str | None] = mapped_column(String(128), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     observed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    ml_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     job: Mapped[ProcessingJob] = relationship(back_populates="frames")

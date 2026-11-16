@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -33,6 +33,12 @@ def clamp_pagination(page: int, page_size: int) -> tuple[int, int]:
     return max(1, page), max(1, min(MAX_PAGE_SIZE, page_size))
 
 
+def like_contains(search: str) -> str:
+    """Case-insensitive substring pattern with LIKE wildcards escaped (use escape='\\')."""
+    escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 def apply_sorting(
     stmt: Select[Any],
     model: type[Base],
@@ -56,7 +62,7 @@ async def paginate(
     page_size: int,
 ) -> Page[Any]:
     page, page_size = clamp_pagination(page, page_size)
-    count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
+    count_stmt = stmt.with_only_columns(func.count(), maintain_column_froms=True).order_by(None)
     total = (await session.execute(count_stmt)).scalar_one()
     rows = (
         (await session.execute(stmt.offset((page - 1) * page_size).limit(page_size)))

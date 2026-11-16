@@ -54,12 +54,14 @@ Worker монтируется так же; после изменения код�
 | redis             | 6379  | Redis / очередь RQ                  |
 | s3 (SeaweedFS)   | 9000  | S3-совместимое хранилище            |
 | s3 (master UI)   | 9333  | SeaweedFS master UI                 |
+| worker (метрики) | 9100  | Prometheus endpoint воркера (`WORKER_METRICS_PORT`, 0.2.0) |
 
 Полезные эндпоинты API:
 
 - Swagger UI: <http://localhost:8000/docs>
 - Health: `/health/live`, `/health/ready`, `/health`
-- Метрики Prometheus: `/metrics`
+- Метрики Prometheus: `/metrics` (API) и `http://localhost:9100/metrics`
+  (worker; при `--scale worker=N` — порт на каждый контейнер через override)
 
 ## Переменные окружения
 
@@ -69,16 +71,20 @@ Worker монтируется так же; после изменения код�
 | Переменная | По умолчанию | Описание |
 |---|---|---|
 | `APP_ENV` | `development` | `development` / `production` / `test` |
+| `DEBUG` | `false` | флаг debug FastAPI (traceback'и в ответах); только для dev |
 | `DATABASE_URL` | `postgresql+asyncpg://mgts:mgts@localhost:5432/mgts_infra` | в compose переопределяется на хост `db` |
-| `REDIS_URL` | `redis://localhost:6379/0` | в compose — хост `redis` |
+| `REDIS_URL` | `redis://localhost:6379/0` | в compose — хост `redis`; тесты используют db 15 |
+| `QUEUE_MODE` | `rq` | `inline` — только тесты/dev, в production запрещён |
 | `STORAGE_BACKEND` | `s3` | `s3` или `local` (файлы в `STORAGE_LOCAL_PATH`) |
-| `S3_ENDPOINT_URL` | `http://localhost:9000` | в compose — `http://s3:9000` |
-| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | `minioadmin` | dev-значения по умолчанию |
+| `S3_ENDPOINT_URL` | `http://localhost:9000` | internal endpoint; в compose — `http://s3:9000` |
+| `S3_PUBLIC_ENDPOINT_URL` | пусто | публичный endpoint для presigned-ссылок (см. ниже) |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | `minioadmin` | dev-значения по умолчанию; в production отклоняются валидатором |
 | `S3_BUCKET` | `mgts-infra` | создаётся сервисом `s3-init` |
 | `ML_PROVIDER` | `mock` | `mock` или `http` (`ML_HTTP_BASE_URL`) |
-| `JWT_SECRET_KEY` | пусто | в dev генерируется случайный; в production **обязателен** |
-| `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` | `admin` / пусто | если пароль задан, админ создаётся при первом старте (когда пользователей нет) |
+| `JWT_SECRET_KEY` | пусто | в dev генерируется случайный **на процесс**; в production **обязателен** (≥ 32 символов, не placeholder) |
+| `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` | `admin` / пусто | если пароль задан, админ создаётся при первом старте (когда пользователей нет); в production — ≥ 12 символов или пусто |
 | `RQ_QUEUE_NAME` | `processing` | имя очереди воркера |
+| `WORKER_METRICS_PORT` | `9100` | Prometheus endpoint воркера |
 | `LOG_FORMAT` | `json` | в dev-оверрайде — `console` |
 
 Важно: `docker-compose.yml` переопределяет `DATABASE_URL`, `REDIS_URL` и
@@ -86,6 +92,31 @@ Worker монтируется так же; после изменения код�
 `.env` с `localhost` используются при запуске вне Docker (тесты, alembic с хоста).
 
 Настоящий `.env` никогда не коммитится (закрыт в `.gitignore`).
+
+### Секреты в dev: пустые значения в .env
+
+`.env.example` содержит **пустые** `JWT_SECRET_KEY` и `BOOTSTRAP_ADMIN_PASSWORD`
+(placeholder'ы запрещены production-валидатором). Поведение в dev:
+
+- пустой `JWT_SECRET_KEY` → случайный эфемерный ключ **на каждый процесс**:
+  после рестарта API старые токены недействительны (просто залогиньтесь снова).
+  Если вы запускаете несколько инстансов API вне compose (реплики, отдельный
+  процесс воркера с проверкой токенов) — задайте явный общий ключ: добавьте в
+  `.env` строку `JWT_SECRET_KEY=<результат openssl rand -hex 32>`, иначе токены
+  одного инстанса не пройдут проверку другого;
+- пустой `BOOTSTRAP_ADMIN_PASSWORD` → админ **не создаётся**. Для первого
+  входа задайте пароль (в dev любой, в production ≥ 12 символов), перезапустите
+  backend, затем смените пароль и очистите переменную.
+
+### S3_PUBLIC_ENDPOINT_URL: зачем нужен
+
+Presigned-ссылка подписывается SigV4 вместе с заголовком Host. В compose
+internal endpoint — `http://s3:9000`, и ссылка с таким host'ом недостижима из
+браузера (переписать host на клиенте нельзя — сломается подпись). Поэтому для
+presign используется отдельный client с `S3_PUBLIC_ENDPOINT_URL`: в dev
+задайте `http://localhost:9000` (порт s3 опубликован), в production — публичный
+URL S3/reverse proxy. Пусто = fallback на `S3_ENDPOINT_URL`. Подробности —
+[storage.md](../integrations/storage.md).
 
 ## Миграции
 
@@ -125,9 +156,20 @@ make test                       # scripts/test.sh
 ```
 
 `scripts/test.sh` поднимает `db`, `redis`, `s3`, `s3-init`, ждёт готовности,
-экспортирует `DATABASE_URL`/`REDIS_URL` на `localhost`, `STORAGE_BACKEND=local`,
+экспортирует `DATABASE_URL`/`REDIS_URL` на `localhost` (Redis — **db 15**,
+чтобы FLUSHDB тестов не стёр dev-очередь в db 0), `STORAGE_BACKEND=local`,
 `STORAGE_LOCAL_PATH=/tmp/mgts-storage` и запускает pytest с покрытием.
-Интеграционные/API-тесты требуют реальных PostgreSQL+PostGIS и Redis.
+Интеграционные/API-тесты требуют реальных PostgreSQL+PostGIS и Redis;
+unit-тесты автономны (без сервисов).
+
+Параллельные прогоны изолируются через `TEST_DB_NAME` (отдельная тестовая БД)
+и `REDIS_URL` (отдельная логическая БД Redis на прогон):
+
+```bash
+TEST_DB_NAME=mgts_infra_test_a REDIS_URL=redis://localhost:6379/14 ./scripts/test.sh -m api
+```
+
+Подробнее — [testing.md](../development/testing.md).
 
 ## Линтеры и типы
 

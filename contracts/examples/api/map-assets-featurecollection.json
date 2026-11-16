@@ -1,0 +1,28 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          37.6173,
+          55.7558
+        ]
+      },
+      "properties": {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "asset_type": "telecom_well",
+        "display_name": "Колодец связи №4217 (Тверская ул.)",
+        "current_condition": "missing_cover",
+        "current_severity": 5,
+        "current_priority": 96.0,
+        "priority_band": "HIGH_PRIORITY",
+        "geolocation_status": "CONFIRMED",
+        "location_accuracy_m": 4.0,
+        "lifecycle_status": "ACTIVE",
+        "last_observed_at": "2026-11-15T12:00:05Z"
+      }
+    }
+  ]
+}

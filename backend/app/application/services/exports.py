@@ -1,6 +1,8 @@
 """CSV / XLSX exports with the same filters as list endpoints.
 
-Secrets and internal technical fields are never exported.
+Secrets and internal technical fields are never exported. Rows are ordered
+deterministically before the EXPORT_ROW_LIMIT truncation; string cells that
+could be interpreted as spreadsheet formulas are prefixed with ' (SEC-11).
 """
 
 from __future__ import annotations
@@ -11,11 +13,11 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
-from geoalchemy2.shape import to_shape
 from openpyxl import Workbook
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.serializers import lonlat
 from app.domain.enums import AuditAction
 from app.infrastructure.database.models.asset import Asset
 from app.infrastructure.database.models.defect import Defect, defect_observations
@@ -24,6 +26,8 @@ from app.infrastructure.database.models.review import Review
 from app.infrastructure.database.repositories.users import AuditRepository
 
 EXPORT_ROW_LIMIT = 50_000
+
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 ASSET_COLUMNS = [
     "id",
@@ -78,15 +82,14 @@ DEFECT_COLUMNS = [
 ]
 
 
-def _lonlat(location: Any) -> tuple[float | None, float | None]:
-    if location is None:
-        return None, None
-    shape = to_shape(location)
-    return float(shape.x), float(shape.y)
-
-
 def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
+
+
+def _escape_cell(value: Any) -> Any:
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
 
 
 class ExportService:
@@ -98,10 +101,10 @@ class ExportService:
         return (await self._session.execute(stmt.limit(EXPORT_ROW_LIMIT))).all()
 
     async def asset_rows(self, stmt: Select[tuple[Asset]]) -> list[dict]:
-        rows = await self._rows(stmt)
+        rows = await self._rows(stmt.order_by(Asset.created_at, Asset.id))
         result = []
         for (asset,) in rows:
-            lon, lat = _lonlat(asset.location)
+            lon, lat = lonlat(asset.location)
             result.append(
                 {
                     "id": str(asset.id),
@@ -124,10 +127,10 @@ class ExportService:
         return result
 
     async def observation_rows(self, stmt: Select[tuple[Observation]]) -> list[dict]:
-        rows = await self._rows(stmt)
+        rows = await self._rows(stmt.order_by(Observation.observed_at, Observation.id))
         result = []
         for (obs,) in rows:
-            lon, lat = _lonlat(obs.location)
+            lon, lat = lonlat(obs.location)
             result.append(
                 {
                     "id": str(obs.id),
@@ -163,6 +166,8 @@ class ExportService:
             .group_by(defect_observations.c.defect_id)
             .subquery()
         )
+        # Correlated latest-review subquery kept intentionally: bounded by the
+        # row limit and indexed on reviews.defect_id; window-join rewrite is backlog.
         latest_review = (
             select(Review.decision)
             .where(Review.defect_id == Defect.id)
@@ -183,11 +188,15 @@ class ExportService:
             .join(Asset, Defect.asset_id == Asset.id)
             .outerjoin(obs_agg, obs_agg.c.defect_id == Defect.id)
         )
-        rows = (await self._session.execute(joined.limit(EXPORT_ROW_LIMIT))).all()
+        rows = (
+            await self._session.execute(
+                joined.order_by(Defect.created_at, Defect.id).limit(EXPORT_ROW_LIMIT)
+            )
+        ).all()
         result = []
         for row in rows:
             defect = row[0]
-            lon, lat = _lonlat(row[2])
+            lon, lat = lonlat(row[2])
             result.append(
                 {
                     "id": str(defect.id),
@@ -218,7 +227,7 @@ class ExportService:
             buffer = io.StringIO()
             writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
             writer.writeheader()
-            writer.writerows(rows)
+            writer.writerows({col: _escape_cell(row.get(col)) for col in columns} for row in rows)
             content = buffer.getvalue().encode("utf-8-sig")
             media_type = "text/csv; charset=utf-8"
         elif fmt == "xlsx":

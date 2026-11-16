@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from app.domain.enums import JobStatus
 
 _TRANSITIONS: dict[JobStatus, frozenset[JobStatus]] = {
@@ -13,11 +15,14 @@ _TRANSITIONS: dict[JobStatus, frozenset[JobStatus]] = {
             JobStatus.PARTIALLY_COMPLETED,
             JobStatus.FAILED,
             JobStatus.CANCELLED,
+            JobStatus.QUEUED,
         }
     ),
     JobStatus.COMPLETED: frozenset(),
-    JobStatus.PARTIALLY_COMPLETED: frozenset({JobStatus.QUEUED, JobStatus.CANCELLED}),
-    JobStatus.FAILED: frozenset({JobStatus.QUEUED, JobStatus.CANCELLED}),
+    JobStatus.PARTIALLY_COMPLETED: frozenset(
+        {JobStatus.QUEUED, JobStatus.CANCELLED, JobStatus.PROCESSING}
+    ),
+    JobStatus.FAILED: frozenset({JobStatus.QUEUED, JobStatus.CANCELLED, JobStatus.PROCESSING}),
     JobStatus.CANCELLED: frozenset({JobStatus.QUEUED}),
 }
 
@@ -50,3 +55,15 @@ def is_retryable(status: JobStatus) -> bool:
 
 def is_cancellable(status: JobStatus) -> bool:
     return status in CANCELLABLE_STATUSES
+
+
+def is_stale_processing(status: JobStatus, updated_at: datetime, threshold_seconds: int) -> bool:
+    """True when a PROCESSING job has not reported progress for longer than the
+    threshold (rq_job_timeout + grace). Only such jobs may go PROCESSING->QUEUED;
+    fresh PROCESSING jobs are owned by a live executor (fenced by advisory lock).
+    """
+    if status != JobStatus.PROCESSING:
+        return False
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - updated_at).total_seconds() > threshold_seconds

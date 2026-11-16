@@ -10,6 +10,7 @@ from app.infrastructure.database.repositories.base import (
     BaseRepository,
     Page,
     apply_sorting,
+    like_contains,
     paginate,
 )
 
@@ -30,7 +31,7 @@ class RouteRepository(BaseRepository[Route]):
         if vehicle_id is not None:
             stmt = stmt.where(Route.vehicle_id == vehicle_id)
         if search:
-            stmt = stmt.where(Route.name.ilike(f"%{search}%"))
+            stmt = stmt.where(Route.name.ilike(like_contains(search), escape="\\"))
         if date_from is not None:
             stmt = stmt.where(Route.started_at >= date_from)
         if date_to is not None:

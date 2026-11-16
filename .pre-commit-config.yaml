@@ -31,3 +31,11 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+
+      # Активируется автоматически, когда Contracts-агент добавит scripts/check_openapi.py.
+      - id: openapi-drift
+        name: OpenAPI contract drift
+        entry: "bash -c 'if [ -f scripts/check_openapi.py ]; then cd backend && uv run python ../scripts/check_openapi.py; else echo \"openapi-drift skipped (scripts/check_openapi.py missing)\"; fi'"
+        language: system
+        files: ^backend/app/(schemas|api)/
+        pass_filenames: false

@@ -9,6 +9,7 @@ from sqlalchemy import (
     Column,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Table,
@@ -36,6 +37,7 @@ defect_observations = Table(
         ForeignKey("observations.id", ondelete="CASCADE"),
         primary_key=True,
     ),
+    Index("ix_defect_observations_observation", "observation_id"),
 )
 
 
@@ -43,7 +45,12 @@ class Defect(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """A concrete problem of a physical asset, confirmed by >=1 observations."""
 
     __tablename__ = "defects"
-    __table_args__ = (CheckConstraint("severity >= 1 AND severity <= 5", name="severity_range"),)
+    __table_args__ = (
+        CheckConstraint("severity >= 1 AND severity <= 5", name="severity_range"),
+        Index("ix_defects_created_at", "created_at"),
+        Index("ix_defects_status_severity", "status", "severity"),
+        Index("ix_defects_asset_type_status", "asset_id", "defect_type", "status"),
+    )
 
     asset_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("assets.id", ondelete="CASCADE"), nullable=False, index=True

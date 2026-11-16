@@ -65,6 +65,12 @@ def normalize_condition(raw: str | None) -> str:
     return CONDITION_ALIASES.get(key, "unknown")
 
 
+def is_valid_condition(raw: str) -> bool:
+    """True when the label is a known alias or canonical condition (incl. explicit 'unknown')."""
+    key = raw.strip().lower().replace("-", "_").replace(" ", "_")
+    return key in CONDITION_ALIASES or key in CANONICAL_CONDITIONS
+
+
 def default_severity_for_condition(condition: str) -> int:
     return CONDITION_DEFAULT_SEVERITY.get(condition, 2)
 

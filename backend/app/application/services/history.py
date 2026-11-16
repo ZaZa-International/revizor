@@ -12,7 +12,7 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.enums import ConditionChangeSource, ObservationReviewStatus
+from app.domain.enums import ConditionChangeSource, ObservationReviewStatus, ReviewDecision
 from app.infrastructure.database.models.asset import Asset
 from app.infrastructure.database.models.history import AssetConditionHistory
 from app.infrastructure.database.models.observation import Observation
@@ -40,6 +40,7 @@ class AssetHistoryService:
         observation_id: uuid.UUID | None = None,
         review_id: uuid.UUID | None = None,
         observation_review_status: ObservationReviewStatus | None = None,
+        review_decision: ReviewDecision | None = None,
         note: str | None = None,
     ) -> AssetConditionHistory | None:
         changed = (
@@ -47,8 +48,10 @@ class AssetHistoryService:
             or asset.current_severity != new_severity
             or (
                 new_priority is not None
-                and asset.current_priority is not None
-                and abs(asset.current_priority - new_priority) > 0.01
+                and (
+                    asset.current_priority is None
+                    or abs(asset.current_priority - new_priority) > 0.01
+                )
             )
         )
         if not changed:
@@ -58,7 +61,9 @@ class AssetHistoryService:
             if not is_physical and note is None:
                 note = "ml_prediction_change_not_confirmed_as_physical"
         else:
-            is_physical = True
+            is_physical = review_decision != ReviewDecision.REJECTED
+            if not is_physical and note is None:
+                note = "rejected_prediction_not_a_physical_change"
         entry = AssetConditionHistory(
             asset_id=asset.id,
             observation_id=observation_id,

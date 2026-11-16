@@ -417,7 +417,9 @@ async def test_subresources_history_observations_defects(client, admin_headers, 
     chain = await seed_observation_chain(database, with_defect=True)
     history = await client.get(f"/api/v1/assets/{chain.asset_id}/history", headers=admin_headers)
     assert history.status_code == 200
-    assert isinstance(history.json(), list)
+    history_body = history.json()
+    assert set(history_body) == {"items", "total", "page", "page_size", "pages"}
+    assert isinstance(history_body["items"], list)
 
     observations = await client.get(
         f"/api/v1/assets/{chain.asset_id}/observations", headers=admin_headers

@@ -5,9 +5,11 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Select, func, select
+from sqlalchemy.dialects.postgresql import distinct_on
 
 from app.domain.enums import DeduplicationResult, ObservationReviewStatus
 from app.domain.geospatial.models import BoundingBox
+from app.infrastructure.database.models.job import ProcessingJob
 from app.infrastructure.database.models.observation import Observation
 from app.infrastructure.database.repositories.assets import bbox_element
 from app.infrastructure.database.repositories.base import (
@@ -37,6 +39,60 @@ class ObservationRepository(BaseRepository[Observation]):
             .limit(1)
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def batch_latest_for_assets(
+        self, asset_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, tuple[datetime, uuid.UUID | None]]:
+        """One DISTINCT ON query: asset_id -> (latest observed_at, job route_id)."""
+        if not asset_ids:
+            return {}
+        stmt = (
+            select(Observation.asset_id, Observation.observed_at, ProcessingJob.route_id)
+            .ext(distinct_on(Observation.asset_id))
+            .join(ProcessingJob, Observation.processing_job_id == ProcessingJob.id)
+            .where(Observation.asset_id.in_(asset_ids))
+            .order_by(Observation.asset_id, Observation.observed_at.desc())
+        )
+        rows = (await self.session.execute(stmt)).all()
+        result: dict[uuid.UUID, tuple[datetime, uuid.UUID | None]] = {}
+        for asset_id, observed_at, route_id in rows:
+            if asset_id is not None:
+                result[asset_id] = (observed_at, route_id)
+        return result
+
+    async def assets_on_route(
+        self, asset_ids: list[uuid.UUID], route_id: uuid.UUID
+    ) -> set[uuid.UUID]:
+        """Assets with ANY observation produced by a job on the given route."""
+        if not asset_ids:
+            return set()
+        stmt = (
+            select(Observation.asset_id)
+            .distinct()
+            .join(ProcessingJob, Observation.processing_job_id == ProcessingJob.id)
+            .where(Observation.asset_id.in_(asset_ids), ProcessingJob.route_id == route_id)
+        )
+        return {
+            aid for aid in (await self.session.execute(stmt)).scalars().all() if aid is not None
+        }
+
+    async def assets_with_tracking(
+        self, asset_ids: list[uuid.UUID], job_id: uuid.UUID, tracking_id: str
+    ) -> set[uuid.UUID]:
+        if not asset_ids:
+            return set()
+        stmt = (
+            select(Observation.asset_id)
+            .distinct()
+            .where(
+                Observation.asset_id.in_(asset_ids),
+                Observation.processing_job_id == job_id,
+                Observation.tracking_id == tracking_id,
+            )
+        )
+        return {
+            aid for aid in (await self.session.execute(stmt)).scalars().all() if aid is not None
+        }
 
     async def count_for_asset(self, asset_id: uuid.UUID) -> int:
         stmt = select(func.count(Observation.id)).where(Observation.asset_id == asset_id)

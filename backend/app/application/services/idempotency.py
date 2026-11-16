@@ -22,12 +22,24 @@ class IdempotencyService:
         return await self._records.get(key, user_id, endpoint)
 
     async def save(
-        self, *, key: str, user_id: uuid.UUID, endpoint: str, status: int, body: dict
+        self,
+        *,
+        key: str,
+        user_id: uuid.UUID,
+        endpoint: str,
+        status: int,
+        body: dict,
+        request_hash: str | None = None,
     ) -> None:
         try:
             async with self._session.begin_nested():
                 self._records.save(
-                    key=key, user_id=user_id, endpoint=endpoint, status=status, body=body
+                    key=key,
+                    user_id=user_id,
+                    endpoint=endpoint,
+                    status=status,
+                    body=body,
+                    request_hash=request_hash,
                 )
                 await self._session.flush()
         except IntegrityError:

@@ -1,0 +1,14 @@
+{
+  "id": "123e4567-e89b-42d3-a456-426614174000",
+  "observation_id": "6ba7b810-9dad-41d4-80b5-e00d71c1a234",
+  "defect_id": null,
+  "reviewer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "decision": "CONFIRMED",
+  "corrected_asset_type": null,
+  "corrected_condition": null,
+  "corrected_defect_type": null,
+  "corrected_severity": null,
+  "comment": "Крышка отсутствует — подтверждено по кропу. Передано в аварийную службу МГТС.",
+  "reviewed_at": "2026-11-15T12:10:00Z",
+  "created_at": "2026-11-15T12:10:00Z"
+}

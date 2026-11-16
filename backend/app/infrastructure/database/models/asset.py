@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from geoalchemy2 import Geography
-from sqlalchemy import CheckConstraint, Enum, Float, Integer, String, Text
+from sqlalchemy import CheckConstraint, Enum, Float, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,6 +37,8 @@ class Asset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "(location IS NULL) = (geolocation_status IN ('UNAVAILABLE', 'INVALID'))",
             name="location_matches_status",
         ),
+        Index("ix_assets_created_at", "created_at"),
+        Index("ix_assets_type_last_observed", "asset_type", "last_observed_at"),
     )
 
     external_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)

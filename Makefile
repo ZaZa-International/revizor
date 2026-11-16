@@ -3,7 +3,7 @@
 COMPOSE     := docker compose
 COMPOSE_DEV := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 
-.PHONY: help up down dev logs migrate seed openapi test lint format typecheck bootstrap build
+.PHONY: help up down dev logs migrate seed openapi openapi-check ts-client breaking-check test lint format typecheck bootstrap build
 
 help: ## Показать список доступных команд
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -34,6 +34,15 @@ seed: ## Загрузить демо-данные
 
 openapi: ## Экспортировать OpenAPI-схему
 	cd backend && uv run python ../scripts/export_openapi.py
+
+openapi-check: ## Проверить drift OpenAPI (committed vs live app)
+	cd backend && uv run python ../scripts/check_openapi.py
+
+ts-client: ## Сгенерировать TypeScript-схему клиента (contracts/typescript)
+	bash scripts/generate_ts_client.sh
+
+breaking-check: ## Проверить breaking-изменения OpenAPI относительно origin/main
+	bash scripts/check_breaking.sh
 
 test: ## Запустить тесты (scripts/test.sh)
 	./scripts/test.sh

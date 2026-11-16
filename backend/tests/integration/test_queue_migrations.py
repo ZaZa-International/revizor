@@ -43,7 +43,7 @@ async def test_migration_head_and_postgis(prepare_database, database):
 
     async with database.session() as conn:
         version = (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one()
-        assert version == "0001_initial"
+        assert version == "0002_hardening"
         ext = (
             await conn.execute(text("SELECT extname FROM pg_extension WHERE extname='postgis'"))
         ).scalar_one()

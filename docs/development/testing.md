@@ -1,18 +1,22 @@
 # Тестирование
 
-Backend полностью покрыт тестами: **262 теста**, все проходят. Тесты выполняются
-против **реальных** PostgreSQL+PostGIS, Redis и объектного хранилища — никогда
-против SQLite или «псевдо-БД». Это осознанное решение (см. [ADR-0011](../decisions/ADR-0011-real-infrastructure-tests.md)).
+Backend полностью покрыт тестами: **262+ тестов** (число растёт в волне 3
+исправлений аудита), все проходят. Тесты выполняются против **реальных**
+PostgreSQL+PostGIS, Redis и объектного хранилища — никогда против SQLite или
+«псевдо-БД». Это осознанное решение (см. [ADR-0011](../decisions/ADR-0011-real-infrastructure-tests.md)).
 
 ## Пирамида тестов
 
-| Уровень | Маркер | Кол-во | Что проверяет | Внешние сервисы |
+Количества ниже — на момент выпуска 0.1.0; волна 3 добавляет тесты
+(regression security, concurrency, infra-down, лимиты тел/размерностей и т.д.).
+
+| Уровень | Маркер | Кол-во (0.1.0) | Что проверяет | Внешние сервисы |
 |---|---|---:|---|---|
-| Unit | `unit` | 108 | Чистая доменная логика: risk scoring, dedup policy, condition-нормализация, state machine, геолокация, валидация загрузок, rate limiting, ML-провайдеры (mock/http на уровне клиента) | В логике тестов не используются, но autouse-фикстура conftest требует запущенные db/redis (см. ниже) |
+| Unit | `unit` | 108 | Чистая доменная логика: risk scoring, dedup policy, condition-нормализация, state machine, геолокация, валидация загрузок, rate limiting, ML-провайдеры (mock/http на уровне клиента) | **Не требуются**: autouse-фикстура `clean_tables` пропускает тесты с маркером `unit` |
 | Integration | `integration` | 35 | Репозитории и PostGIS-запросы, полный pipeline обработки, дедупликация на реальной БД, хранилище, экспорты, review-логика с БД, миграции очереди | PostGIS, Redis, storage |
 | API | `api` | 83 | Эндпоинты `/api/v1/*` через ASGI-транспорт против реальной БД: auth/RBAC, uploads, jobs, assets, reviews, map, analytics, exports, ml, health | PostGIS, Redis, storage |
 | Contract | `contract` | 36 | Контракт backend ↔ ML (JSON Schema ↔ Pydantic ↔ примеры) и контракт backend ↔ frontend (конверт ошибок, пагинация, порядок координат GeoJSON, сквозные сценарии) | PostGIS, Redis, storage |
-| **Итого** | | **262** | | |
+| **Итого** | | **262+** | | |
 
 Каталоги: `backend/tests/unit/`, `backend/tests/integration/`, `backend/tests/api/`,
 `backend/tests/contracts/`, общие хелперы — `backend/tests/fixtures/`.
@@ -29,7 +33,8 @@ make test          # = scripts/test.sh
 1. поднимает инфраструктуру: `docker compose up -d db redis s3 s3-init`;
 2. ждёт `healthy` у db/redis/s3 (до 120 с на сервис);
 3. экспортирует тестовые переменные окружения (`STORAGE_BACKEND=local`,
-   `APP_ENV=test`, `ML_PROVIDER=mock` и т.д.);
+   `APP_ENV=test`, `ML_PROVIDER=mock`, `REDIS_URL=redis://localhost:6379/15`
+   и т.д.);
 4. запускает `uv run pytest --cov=app --cov-report=term-missing` из `backend/`.
 
 Аргументы пробрасываются в pytest: `make test ARGS=...` не поддерживается,
@@ -37,11 +42,11 @@ make test          # = scripts/test.sh
 
 ### Выборочный прогон
 
-Из каталога `backend/` (инфраструктура должна быть запущена — **в том числе для
-unit**, см. «Изоляция тестовой БД»):
+Из каталога `backend/`. Unit-тесты автономны; для integration/api/contract
+инфраструктура должна быть запущена (`docker compose up -d db redis s3 s3-init`):
 
 ```bash
-uv run pytest -m unit                 # 108 тестов; db/redis должны работать (autouse-фикстура)
+uv run pytest -m unit                 # без внешних сервисов (clean_tables пропускает unit)
 uv run pytest -m integration          # нужен docker compose db redis s3
 uv run pytest -m api
 uv run pytest -m contract
@@ -78,12 +83,13 @@ make format        # автоформатирование: ruff format + ruff ch
 Запуск: `docker compose up -d db redis s3 s3-init` (или `make bootstrap` для
 первичной настройки).
 
-**Важно:** autouse-фикстура `clean_tables` (на каждый тест) зависит от
-`database` → `prepare_database`, поэтому даже unit-тесты требуют запущенных
-PostgreSQL и Redis: сессия создаёт/мигрирует `mgts_infra_test` и делает flush
-Redis db 15. Сама логика unit-тестов к БД не обращается, но без инфраструктуры
-прогон упадёт на фикстуре. S3 для тестов не обязателен (local-бэкенд), кроме
-`test_s3_roundtrip`, которому нужен живой S3 на `localhost:9000`.
+**Важно:** autouse-фикстура `clean_tables` **пропускает тесты с маркером
+`unit`** — unit-прогон не требует ни PostgreSQL, ни Redis, ни S3. Для
+integration/api/contract фикстура зависит от `database` → `prepare_database`:
+сессия создаёт/мигрирует тестовую БД и делает flush Redis. S3 для большинства
+тестов не обязателен (local-бэкенд), кроме `test_s3_roundtrip`, которому нужен
+живой S3: локально — `localhost:9000` (поднимает `scripts/test.sh`), в CI —
+localstack на `localhost:4566` (`S3_ENDPOINT_URL`).
 
 ## Изоляция тестовой БД
 
@@ -91,7 +97,7 @@ Redis db 15. Сама логика unit-тестов к БД не обращае
 
 - берет `DATABASE_URL` (по умолчанию `postgresql+asyncpg://mgts:mgts@localhost:5432/mgts_infra`)
   и подменяет имя БД на **`mgts_infra_test`** — рабочая БД `mgts_infra` никогда
-  не затрагивается;
+  не затрагивается. Имя переопределяется переменной **`TEST_DB_NAME`**;
 - фикстура `prepare_database` (session): создаёт `mgts_infra_test`, если её нет,
   и применяет `alembic upgrade head` (subprocess, таймаут 180 с);
 - Redis: `REDIS_URL` по умолчанию `redis://localhost:6379/15`, `FLUSHDB` перед
@@ -102,10 +108,27 @@ Redis db 15. Сама логика unit-тестов к БД не обращае
 - `APP_ENV=test`, фиксированный тестовый `JWT_SECRET_KEY`, bootstrap-админ
   `admin` / `admin-test-password`, rate-лимиты подняты до 10000/мин, чтобы не
   мешать тестам;
-- фикстура `clean_tables` (**autouse**, на каждый тест): `TRUNCATE ... RESTART
-  IDENTITY CASCADE` всех таблиц public, кроме `alembic_version` и
-  `spatial_ref_sys`. Каждый тест начинает с чистой схемы; миграции не
-  пересоздаются.
+- фикстура `clean_tables` (**autouse**, на каждый тест; **пропускается для
+  маркера `unit`**): `TRUNCATE ... RESTART IDENTITY CASCADE` всех таблиц
+  public, кроме `alembic_version` и `spatial_ref_sys`. Каждый тест начинает
+  с чистой схемы; миграции не пересоздаются.
+
+### Параллельные прогоны
+
+Несколько прогонов pytest на одной машине изолируются переменными окружения:
+
+```bash
+TEST_DB_NAME=mgts_infra_test_a REDIS_URL=redis://localhost:6379/14 ./scripts/test.sh -m api &
+TEST_DB_NAME=mgts_infra_test_b REDIS_URL=redis://localhost:6379/13 ./scripts/test.sh -m contract &
+```
+
+- `TEST_DB_NAME` — отдельная тестовая БД на прогон (создаётся и мигрируется
+  автоматически);
+- `REDIS_URL` — отдельная логическая БД Redis на прогон (`FLUSHDB` в
+  `prepare_database` иначе сотрёт данные соседнего прогона; **никогда не
+  используйте db 0** — там dev-очередь RQ);
+- storage изолируется автоматически: conftest создаёт свежий
+  `tempfile.mkdtemp(prefix="mgts-test-storage-")` на каждый прогон.
 
 ## Обзор фикстур
 
@@ -116,7 +139,7 @@ Redis db 15. Сама логика unit-тестов к БД не обращае
 | `settings` | session | `Settings` с тестовым окружением |
 | `prepare_database` | session | Создание БД + миграции + flush Redis |
 | `database` | session | `Database` (engine/session factory), dispose в конце |
-| `clean_tables` | function, autouse | Очистка таблиц перед каждым тестом |
+| `clean_tables` | function, autouse | Очистка таблиц перед каждым тестом (пропускается для маркера `unit`) |
 | `app` | function | `create_app()` с прожитым lifespan |
 | `client` | function | `httpx.AsyncClient` поверх `ASGITransport` (без сети) |
 | `admin_headers` | function | Bearer-заголовки bootstrap-админа |
@@ -145,20 +168,19 @@ Redis db 15. Сама логика unit-тестов к БД не обращае
 ## CI (`.github/workflows/ci.yml`)
 
 - **lint-typecheck**: `uv sync --frozen`, `ruff check`, `ruff format --check`, `mypy app`;
-- **tests**: service containers `postgis/postgis:16-3.4` и `redis:7` (healthchecks),
+- **tests**: service containers `postgis/postgis:16-3.4`, `redis:7` и
+  `localstack/localstack` (SERVICES=s3, порт 4566) с healthchecks;
+  окружение job'а задаёт `S3_ENDPOINT_URL=http://localhost:4566` — S3-тесты
+  (`test_s3_roundtrip`) выполняются против localstack, skip-условия не нужны;
   `alembic upgrade head`, затем `pytest -m unit` отдельно и
   `pytest -m "integration or api or contract"` с coverage;
 - **migration roundtrip**: `alembic downgrade base && alembic upgrade head` —
   миграции обязаны быть обратимыми;
 - **docker-build**: сборка образа backend;
-- отдельно `.github/workflows/security.yml`: `pip-audit` в строгом режиме
-  (любая известная уязвимость роняет job), по PR и еженедельно.
-
-> Замечание: job `tests` в CI поднимает только db и redis; S3-сервиса среди
-> service containers нет, а `tests/integration/test_storage.py::test_s3_roundtrip`
-> требует живой S3 на `localhost:9000`. Локально это закрывается
-> `scripts/test.sh` (поднимает s3); для CI может понадобиться добавить
-> S3-совместимый service container или skip-условие для этого теста.
+- отдельно `.github/workflows/security.yml`: `pip-audit` — job падает на любой
+  известной уязвимости в зависимостях (`continue-on-error: false`), по PR и
+  еженедельно. План (волна 3): добавить флаг `--strict`, чтобы job падал также
+  на зависимостях, которые не удалось проаудировать.
 
 ## Правила
 
@@ -178,8 +200,10 @@ Redis db 15. Сама логика unit-тестов к БД не обращае
    `{"error": {code, message, details, request_id}}`, формат пагинации, порядок
    координат GeoJSON `(longitude, latitude)`, сквозные сценарии
    upload → job → observations → review.
-5. **Изоляция.** Не пишите в `mgts_infra`, не используйте Redis db ≠ 15 в тестах,
-   не рассчитывайте на состояние от предыдущего теста (`clean_tables` его удалит).
+5. **Изоляция.** Не пишите в `mgts_infra`, не используйте Redis db 0 в тестах
+   (dev-очередь RQ; дефолт тестов — db 15, для параллельных прогонов — своя
+   изолированная db на прогон), не рассчитывайте на состояние от предыдущего
+   теста (`clean_tables` его удалит).
 6. **Детерминизм.** Случайность — только с фиксированным seed; время — через
    явные параметры, не «сейчас» в проверках.
 

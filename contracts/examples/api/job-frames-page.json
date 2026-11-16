@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "id": "e3b0c442-98fc-4c12-9b3a-1f2e3d4c5b60",
+      "frame_index": 0,
+      "status": "PROCESSED",
+      "reject_reason": null,
+      "error_code": null,
+      "observed_at": "2026-11-15T12:00:00Z"
+    },
+    {
+      "id": "e3b0c442-98fc-4c12-9b3a-1f2e3d4c5b61",
+      "frame_index": 1,
+      "status": "REJECTED",
+      "reject_reason": "blur",
+      "error_code": null,
+      "observed_at": "2026-11-15T12:00:01Z"
+    },
+    {
+      "id": "e3b0c442-98fc-4c12-9b3a-1f2e3d4c5b62",
+      "frame_index": 2,
+      "status": "PROCESSED",
+      "reject_reason": null,
+      "error_code": null,
+      "observed_at": "2026-11-15T12:00:02Z"
+    }
+  ],
+  "total": 12,
+  "page": 1,
+  "page_size": 3,
+  "pages": 4
+}

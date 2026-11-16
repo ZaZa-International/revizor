@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import CheckConstraint, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.enums import ReviewDecision
@@ -22,13 +22,14 @@ class Review(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             "corrected_severity IS NULL OR (corrected_severity >= 1 AND corrected_severity <= 5)",
             name="corrected_severity_range",
         ),
+        Index("ix_reviews_created_at", "created_at"),
     )
 
     observation_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("observations.id", ondelete="CASCADE"), nullable=True, index=True
+        ForeignKey("observations.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     defect_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("defects.id", ondelete="CASCADE"), nullable=True, index=True
+        ForeignKey("defects.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     reviewer_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True

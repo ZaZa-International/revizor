@@ -134,7 +134,7 @@ cd backend
 uv run ruff check . && uv run ruff format --check .
 uv run mypy app
 uv run pytest -m unit                 # быстро, без сервисов
-uv run pytest                         # полностью (infra: docker compose up -d db redis s3 s3-init)
+uv run pytest                         # полностью (infra: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db redis s3 s3-init)
 ```
 
 Из корня: `make lint`, `make test`. Миграции: `uv run alembic upgrade head`
@@ -157,6 +157,44 @@ Docker: `docker compose build backend`. OpenAPI: `make openapi` (коммити�
 ## 11. Окружение
 
 Конфиг — `app/config.py` (pydantic-settings, env). `.env.example` — источник истины по
-переменным. Dev-инфраструктура: `docker compose up -d db redis s3 s3-init`
-(S3 = SeaweedFS; MinIO-совместимый API, см. ADR-0006). Порты: 5432, 6379, 9000 (S3), 8000 (API).
-Python 3.12 через uv (`uv sync`). Не добавлять зависимости без обоснования в PR/ADR.
+переменным (полный inventory). Dev-инфраструктура:
+`docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db redis s3 s3-init`
+(S3 = SeaweedFS; MinIO-совместимый API, см. ADR-0006). Базовый compose НЕ публикует
+infra-порты на хост (SEC-4); порты 5432/6379/9000/9333/9100 открывает только dev-override.
+Миграции в compose выполняет one-shot `migrate` сервис с advisory lock — не добавлять
+`alembic upgrade` в command backend/worker. Python 3.12 через uv (`uv sync`).
+Не добавлять зависимости без обоснования в PR/ADR.
+
+## 12. Правила 0.2.0 (по итогам аудита, docs/audit/backend-audit.md)
+
+- **Тело запроса**: BodyLimitMiddleware отклоняет 413 ДО auth/буферизации
+  (multipart ≤ MAX_UPLOAD_SIZE_BYTES+1MB, JSON ≤ MAX_JSON_BODY_BYTES). Не снимать
+  middleware и не поднимать лимиты без ADR.
+- **Секреты**: production-валидатор отклоняет placeholders/короткий JWT/дефолтные S3
+  credentials/inline queue/CORS `*`. `.env.example` держит секреты ПУСТЫМИ.
+- **Медиа-доступ**: presigned/image/crop URL и `/files/{key}` — только
+  OPERATOR/ADMIN/SERVICE (`can_access_media`); VIEWER — метаданные. Удаление upload —
+  только загрузивший или ADMIN. Cross-user checksum dedup — redacted-запись.
+- **Idempotency**: `Idempotency-Key` ≤128 символов; fingerprint запроса хранится в
+  `idempotency_keys.request_hash`; replay с другим payload → 409 `idempotency_conflict`;
+  конкурентный same-key сериализуется advisory xact lock. Job-key scoped (key, upload_id).
+- **Pipeline**: исполнение fenced advisory lock'ом на job; `PROCESSED` кадр НИКОГДА не
+  понижается в `FAILED`; ML-ответ write-ahead в `job_frames.ml_response` (повторная
+  инференция не вызывает ML); `request_id` детерминирован uuid5(job_id, frame_index);
+  crop keys детерминированы; total_frames reconciles вверх (CHECK frames_sum);
+  размерность кадра probe ДО decode (лимиты 64MP/8192, downscale 4096).
+- **Восстановление**: stale-sweeper (worker startup + 600s) переводит зависшие
+  PROCESSING/QUEUED без живого RQ-исполнения в FAILED `stale_*`; retry stale PROCESSING
+  разрешён; активный job на upload один (partial unique) → 409.
+- **Метрики worker**: multiprocess-режим prometheus_client (PROMETHEUS_MULTIPROC_DIR
+  задаётся в worker.py ДО импортов); не переводить worker на in-process registry.
+- **OpenAPI**: каждый endpoint обязан иметь summary+description+operationId(=имя
+  функции)+response-схемы+декларированные ошибки (custom APIRoute). После изменения
+  API: `make openapi` (коммитить JSON), `make ts-client` (коммитить schema.d.ts),
+  `make openapi-check`, тесты tests/contracts. Breaking — только с записью CHANGELOG
+  и обновлением docs/api + frontend-contract (pre-1.0 допускается).
+- **Тесты**: 661 тест; параллельные прогоны изолировать `TEST_DB_NAME` + своим Redis db;
+  security regression (tests/api/test_security_regression.py, test_permissions_matrix.py)
+  не ослаблять; новые мутации — добавлять в role matrix.
+- **Локальный CI**: `bash scripts/ci_local.sh` (12 шагов) — запускать перед сдачей
+  крупных изменений; GitHub CI недоступен для проверки из этой среды.

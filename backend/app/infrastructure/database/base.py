@@ -27,9 +27,7 @@ class UUIDPrimaryKeyMixin:
 
 
 class CreatedAtMixin:
-    created_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False, index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 
 
 class TimestampMixin(CreatedAtMixin):

@@ -54,8 +54,9 @@ async def test_job_frames_lists_records(client, admin_headers, database):
     seeded = await seed_job(database, status=JobStatus.COMPLETED, frames=2)
     response = await client.get(f"/api/v1/jobs/{seeded.job_id}/frames", headers=admin_headers)
     assert response.status_code == 200
-    frames = response.json()
-    assert isinstance(frames, list)
+    body = response.json()
+    assert body["total"] == 2
+    frames = body["items"]
     assert len(frames) == 2
     assert [frame["frame_index"] for frame in frames] == [0, 1]
     assert all(frame["status"] == "PROCESSED" for frame in frames)
@@ -71,7 +72,9 @@ async def test_inline_pipeline_produces_frame_records(client, admin_headers, dat
         f"/api/v1/jobs/{created.json()['id']}/frames", headers=admin_headers
     )
     assert response.status_code == 200
-    frames = response.json()
+    body = response.json()
+    frames = body["items"]
+    assert body["total"] >= 1
     assert len(frames) >= 1
     assert frames[0]["frame_index"] == 0
 

@@ -6,17 +6,24 @@ import hashlib
 import re
 import tempfile
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
 
 import anyio
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.interfaces.storage import ObjectStorage
 from app.config import Settings
-from app.core.exceptions import ConflictError, StorageError, ValidationAppError
-from app.domain.enums import AuditAction, MediaType, StorageObjectKind
+from app.core.exceptions import (
+    ConflictError,
+    PermissionDeniedError,
+    StorageError,
+    ValidationAppError,
+)
+from app.domain.enums import AuditAction, MediaType, StorageObjectKind, UserRole
+from app.infrastructure.database.models.job import ProcessingJob
 from app.infrastructure.database.models.stored_file import StoredFile
 from app.infrastructure.database.models.upload import Upload
 from app.infrastructure.database.repositories.uploads import (
@@ -36,6 +43,12 @@ _MAGIC_SIGNATURES: list[tuple[bytes, int, str, MediaType]] = [
     (b"ftyp", 4, "video/mp4", MediaType.VIDEO),
 ]
 
+_MP4_FTYP_BRANDS = frozenset(
+    {b"isom", b"iso2", b"mp41", b"mp42", b"avc1", b"M4V ", b"qt  ", b"3gp4", b"3gp5", b"dash"}
+)
+
+REDACTED_PLACEHOLDER = "[redacted]"
+
 
 def sanitize_filename(filename: str) -> str:
     name = Path(filename).name
@@ -50,16 +63,38 @@ def sniff_media_type(header: bytes) -> tuple[str, MediaType] | None:
                 continue
             if mime == "video/x-msvideo" and header[8:12] != b"AVI ":
                 continue
-            if mime == "video/mp4" and header[8:12] == b"qt  ":
-                return "video/quicktime", MediaType.VIDEO
+            if mime == "video/mp4":
+                brand = header[8:12]
+                if brand not in _MP4_FTYP_BRANDS:
+                    continue
+                if brand == b"qt  ":
+                    return "video/quicktime", MediaType.VIDEO
             return mime, media
     return None
+
+
+def _redacted_upload(upload: Upload) -> Upload:
+    """Transient copy hiding another user's filename, storage key and GPS metadata."""
+    return Upload(
+        id=upload.id,
+        original_filename=REDACTED_PLACEHOLDER,
+        storage_key=REDACTED_PLACEHOLDER,
+        content_type="application/octet-stream",
+        file_size=upload.file_size,
+        checksum_sha256=upload.checksum_sha256,
+        media_type=upload.media_type,
+        uploaded_by=None,
+        route_id=None,
+        metadata_={},
+        created_at=upload.created_at,
+    )
 
 
 @dataclass
 class UploadResult:
     upload: Upload
     created: bool
+    redacted: bool = False
 
 
 class UploadService:
@@ -91,10 +126,12 @@ class UploadService:
     async def create_upload(
         self,
         *,
-        stream: BinaryIO,
+        read_chunk: Callable[[], Awaitable[bytes]],
         filename: str,
         content_type: str,
         uploaded_by: uuid.UUID | None,
+        requester_id: uuid.UUID | None = None,
+        requester_role: UserRole | None = None,
         route_id: uuid.UUID | None = None,
         metadata: dict | None = None,
     ) -> UploadResult:
@@ -106,7 +143,7 @@ class UploadService:
         header = b""
         tmp = tempfile.NamedTemporaryFile(prefix="mgts-upload-", delete=False)  # noqa: SIM115
         try:
-            while chunk := stream.read(_CHUNK):
+            while chunk := await read_chunk():
                 size += len(chunk)
                 if size > self._settings.max_upload_size_bytes:
                     raise ValidationAppError(
@@ -133,6 +170,10 @@ class UploadService:
             checksum = digest.hexdigest()
             existing = await self._uploads.get_by_checksum(checksum)
             if existing is not None:
+                if existing.uploaded_by != requester_id and requester_role != UserRole.ADMIN:
+                    return UploadResult(
+                        upload=_redacted_upload(existing), created=False, redacted=True
+                    )
                 return UploadResult(upload=existing, created=False)
 
             upload_id = uuid.uuid4()
@@ -187,11 +228,17 @@ class UploadService:
             tmp.close()
             await anyio.to_thread.run_sync(lambda: Path(tmp.name).unlink(missing_ok=True))
 
-    async def delete_upload(self, upload: Upload, actor_id: uuid.UUID | None) -> None:
-        from sqlalchemy import func, select
+    async def delete_upload(
+        self, upload: Upload, actor_id: uuid.UUID | None, actor_role: UserRole | None
+    ) -> None:
+        """Delete only by the uploader or ADMIN.
 
-        from app.infrastructure.database.models.job import ProcessingJob
-
+        DB delete + audit happen here; the storage object is removed after the
+        request transaction commits (get_session drains storage_delete_keys),
+        so a failed commit never leaves a dangling row without its object.
+        """
+        if actor_role != UserRole.ADMIN and upload.uploaded_by != actor_id:
+            raise PermissionDeniedError("Only the uploader or an admin may delete this upload")
         jobs_count = int(
             (
                 await self._session.execute(
@@ -201,12 +248,14 @@ class UploadService:
         )
         if jobs_count > 0:
             raise ConflictError("Upload has processing jobs and cannot be deleted")
-        await self._storage.delete(upload.storage_key)
+        storage_key = upload.storage_key
         self._audit.record(
             actor_id=actor_id,
             action=AuditAction.DELETE.value,
             entity_type="upload",
             entity_id=upload.id,
-            before_state={"storage_key": upload.storage_key},
+            before_state={"storage_key": storage_key},
         )
         await self._uploads.delete(upload)
+        await self._session.flush()
+        self._session.info.setdefault("storage_delete_keys", []).append(storage_key)

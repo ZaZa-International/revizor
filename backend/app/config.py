@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     storage_backend: Literal["s3", "local"] = "s3"
     storage_local_path: str = "./var/storage"
     s3_endpoint_url: str = "http://localhost:9000"
+    s3_public_endpoint_url: str = ""
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
     s3_bucket: str = "mgts-infra"
@@ -74,10 +75,16 @@ class Settings(BaseSettings):
     )
 
     rate_limit_login_per_minute: int = 10
+    rate_limit_login_per_username_per_minute: int = 20
     rate_limit_upload_per_minute: int = 30
+
+    max_json_body_bytes: int = 2 * 1024 * 1024
 
     processing_frame_interval_seconds: float = 1.0
     processing_max_frames: int = 2000
+    processing_max_image_pixels: int = 64_000_000
+    processing_max_frame_side: int = 4096
+    processing_hard_max_frame_side: int = 8192
     quality_gate_enabled: bool = True
     quality_blur_threshold: float = 60.0
     quality_min_width: int = 320
@@ -89,6 +96,12 @@ class Settings(BaseSettings):
     dedup_match_threshold: float = 0.70
     dedup_possible_threshold: float = 0.45
     dedup_time_window_hours: float = 2.0
+    dedup_max_candidates: int = 50
+
+    gps_max_accuracy_m: float = 50.0
+
+    stale_job_grace_seconds: int = 120
+    worker_metrics_port: int = 9100
 
     risk_policy_version: str = "1.0"
     risk_high_threshold: float = 70.0
@@ -106,12 +119,40 @@ class Settings(BaseSettings):
     demo_area_bbox: str = "37.55,55.70,37.70,55.80"
     coverage_grid_cell_m: float = 250.0
 
+    @property
+    def stale_job_threshold_seconds(self) -> int:
+        return self.rq_job_timeout + self.stale_job_grace_seconds
+
     @model_validator(mode="after")
     def _validate_secrets(self) -> Settings:
+        placeholders = {"change-me-in-production", "change-me-admin", "changeme", "secret"}
+        if self.app_env == "production":
+            if not self.jwt_secret_key or self.jwt_secret_key in placeholders:
+                raise ValueError(
+                    "JWT_SECRET_KEY must be set to a strong random value in production "
+                    "(generate: openssl rand -hex 32)"
+                )
+            if len(self.jwt_secret_key) < 32:
+                raise ValueError("JWT_SECRET_KEY must be at least 32 characters in production")
+            if self.bootstrap_admin_password and (
+                self.bootstrap_admin_password in placeholders
+                or len(self.bootstrap_admin_password) < 12
+            ):
+                raise ValueError(
+                    "BOOTSTRAP_ADMIN_PASSWORD must be empty (skip bootstrap) or a strong "
+                    "value (>=12 chars, not a placeholder) in production"
+                )
+            if self.s3_access_key == "minioadmin" or self.s3_secret_key == "minioadmin":
+                raise ValueError("Default S3 credentials are not allowed in production")
+            if self.queue_mode == "inline":
+                raise ValueError("QUEUE_MODE=inline is not allowed in production")
         if not self.jwt_secret_key:
-            if self.app_env == "production":
-                raise ValueError("JWT_SECRET_KEY must be set in production")
             object.__setattr__(self, "jwt_secret_key", secrets.token_urlsafe(48))
+        if "*" in self.cors_origins:
+            raise ValueError(
+                "CORS_ORIGINS must not contain '*' while credentials are allowed; "
+                "list explicit origins"
+            )
         return self
 
 

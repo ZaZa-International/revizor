@@ -1,0 +1,30 @@
+{
+  "area_bbox": {
+    "min_longitude": 37.55,
+    "min_latitude": 55.7,
+    "max_longitude": 37.7,
+    "max_latitude": 55.8
+  },
+  "grid_cell_m": 250.0,
+  "grid_cols": 38,
+  "grid_rows": 45,
+  "total_cells": 1710,
+  "covered_cells": 1,
+  "coverage_ratio": 0.0006,
+  "gap_cells": 1709,
+  "covered_cell_counts": [
+    {
+      "cx": 16.0,
+      "cy": 24.0,
+      "observations": 1
+    }
+  ],
+  "routes": [
+    {
+      "route_id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
+      "name": "Объезд №12 — Тверской район",
+      "observations": 1
+    }
+  ],
+  "note": "heuristic grid coverage over the configured area; not a road-network model"
+}

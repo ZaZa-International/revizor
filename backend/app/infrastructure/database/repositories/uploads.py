@@ -9,7 +9,13 @@ from sqlalchemy import Select, select
 from app.domain.enums import MediaType
 from app.infrastructure.database.models.stored_file import StoredFile
 from app.infrastructure.database.models.upload import Upload
-from app.infrastructure.database.repositories.base import BaseRepository, Page, paginate
+from app.infrastructure.database.repositories.base import (
+    BaseRepository,
+    Page,
+    apply_sorting,
+    like_contains,
+    paginate,
+)
 
 
 class UploadRepository(BaseRepository[Upload]):
@@ -38,7 +44,7 @@ class UploadRepository(BaseRepository[Upload]):
         if uploaded_by is not None:
             stmt = stmt.where(Upload.uploaded_by == uploaded_by)
         if search:
-            stmt = stmt.where(Upload.original_filename.ilike(f"%{search}%"))
+            stmt = stmt.where(Upload.original_filename.ilike(like_contains(search), escape="\\"))
         if date_from is not None:
             stmt = stmt.where(Upload.created_at >= date_from)
         if date_to is not None:
@@ -54,8 +60,6 @@ class UploadRepository(BaseRepository[Upload]):
         sort_by: str | None,
         order: str,
     ) -> Page[Upload]:
-        from app.infrastructure.database.repositories.base import apply_sorting
-
         stmt = apply_sorting(
             stmt,
             Upload,
@@ -73,7 +77,3 @@ class UploadRepository(BaseRepository[Upload]):
 class StoredFileRepository(BaseRepository[StoredFile]):
     model = StoredFile
     entity_name = "StoredFile"
-
-    async def get_by_key(self, key: str) -> StoredFile | None:
-        stmt = select(StoredFile).where(StoredFile.storage_key == key)
-        return (await self.session.execute(stmt)).scalar_one_or_none()

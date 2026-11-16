@@ -24,10 +24,15 @@ async def ingest_image(
     metadata: dict,
     filename: str = "frame.jpg",
 ) -> Upload:
+    buffer = io.BytesIO(jpeg)
+
+    async def read_chunk() -> bytes:
+        return buffer.read(1024 * 1024)
+
     async with database.session() as session:
         service = UploadService(session, storage, settings)
         result = await service.create_upload(
-            stream=io.BytesIO(jpeg),
+            read_chunk=read_chunk,
             filename=filename,
             content_type="image/jpeg",
             uploaded_by=None,

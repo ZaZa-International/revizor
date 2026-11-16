@@ -17,10 +17,10 @@ class TrainingExample(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "training_examples"
 
     observation_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("observations.id", ondelete="CASCADE"), unique=True, nullable=False
+        ForeignKey("observations.id", ondelete="RESTRICT"), unique=True, nullable=False
     )
     review_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("reviews.id", ondelete="RESTRICT"), nullable=False
     )
     image_storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
     label: Mapped[dict] = mapped_column(JSONB, nullable=False)

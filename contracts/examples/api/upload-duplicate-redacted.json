@@ -1,0 +1,17 @@
+{
+  "upload": {
+    "id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+    "original_filename": "[redacted]",
+    "storage_key": "[redacted]",
+    "content_type": "application/octet-stream",
+    "file_size": 482317,
+    "checksum_sha256": "522336f4bf6d2105693641a94f36cf1e0e67b06528eca068aea9534ef8e23073",
+    "media_type": "IMAGE",
+    "uploaded_by": null,
+    "route_id": null,
+    "metadata": {},
+    "created_at": "2026-11-15T12:00:10Z",
+    "presigned_url": null
+  },
+  "created": false
+}

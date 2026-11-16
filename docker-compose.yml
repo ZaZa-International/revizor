@@ -1,5 +1,10 @@
 name: mgts-infra
 
+# SEC-4: базовый файл НЕ публикует порты db/redis/s3 на host — только внутренняя
+# сеть compose. Публикация портов для локальной разработки — исключительно в
+# docker-compose.dev.yml (docker compose -f docker-compose.yml -f docker-compose.dev.yml).
+# Наружу смотрит только API (8000). Метрики worker'а (9100) — internal only.
+
 x-backend-common: &backend-common
   build:
     context: ./backend
@@ -13,6 +18,8 @@ x-backend-common: &backend-common
     DATABASE_URL: postgresql+asyncpg://mgts:mgts@db:5432/mgts_infra
     REDIS_URL: redis://redis:6379/0
     S3_ENDPOINT_URL: http://s3:9000
+    # GEO-2: публичный endpoint для presigned-ссылок (браузер не видит http://s3:9000).
+    S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL:-http://localhost:9000}
   depends_on: &backend-depends
     db:
       condition: service_healthy
@@ -21,6 +28,8 @@ x-backend-common: &backend-common
     s3:
       condition: service_healthy
     s3-init:
+      condition: service_completed_successfully
+    migrate:
       condition: service_completed_successfully
 
 services:
@@ -31,8 +40,6 @@ services:
       POSTGRES_USER: mgts
       POSTGRES_PASSWORD: mgts
       POSTGRES_DB: mgts_infra
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -45,8 +52,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # REL-1: AOF durability — очередь RQ не теряется при краше/рестарте Redis.
+    command: redis-server --appendonly yes
     volumes:
       - redisdata:/data
     healthcheck:
@@ -59,14 +66,11 @@ services:
   # publicly distributed (Docker Hub repo removed, dl.min.io returns 410), so the
   # dev/demo environment uses SeaweedFS behind the same S3 API. See ADR-0006.
   s3:
-    image: chrislusf/seaweedfs:latest
+    image: chrislusf/seaweedfs:4.53
     restart: unless-stopped
     command: >
       server -dir=/data -volume.max=0 -master.volumeSizeLimitMB=256
       -filer -s3 -s3.port=9000 -ip.bind=0.0.0.0
-    ports:
-      - "9000:9000"
-      - "9333:9333"
     volumes:
       - s3data:/data
     healthcheck:
@@ -77,7 +81,7 @@ services:
       start_period: 10s
 
   s3-init:
-    image: amazon/aws-cli:latest
+    image: amazon/aws-cli:2.40.3
     restart: "no"
     depends_on:
       s3:
@@ -87,12 +91,25 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-minioadmin}
       AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
       S3_BUCKET: ${S3_BUCKET:-mgts-infra}
+    # OPS-10: не глотаем ошибки — если mb не удался, бакет обязан уже существовать,
+    # иначе s3-init падает и backend/worker не стартуют.
     entrypoint: >
-      /bin/sh -c "aws --endpoint-url http://s3:9000 s3 mb s3://$${S3_BUCKET} || true"
+      /bin/sh -c "aws --endpoint-url http://s3:9000 s3 mb s3://$${S3_BUCKET}
+      || aws --endpoint-url http://s3:9000 s3 ls s3://$${S3_BUCKET}"
+
+  # OPS-1: миграции — one-shot сервис под advisory lock (backend/migrate.py),
+  # а не alembic в command каждой реплики backend.
+  migrate:
+    <<: *backend-common
+    command: python migrate.py
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
 
   backend:
     <<: *backend-common
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
     healthcheck:
@@ -105,6 +122,9 @@ services:
   worker:
     <<: *backend-common
     command: python -m app.workers.worker
+    # OPS-3: warm shutdown RQ должен успеть дождаться in-flight job (бюджет 300s);
+    # backstop для зависших — stale-sweeper (REL-1).
+    stop_grace_period: 300s
     healthcheck:
       test:
         [

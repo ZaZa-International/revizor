@@ -13,6 +13,7 @@ from app.infrastructure.database.repositories.base import (
     BaseRepository,
     Page,
     apply_sorting,
+    like_contains,
     paginate,
 )
 
@@ -60,8 +61,10 @@ class AssetRepository(BaseRepository[Asset]):
                 func.ST_Intersects(Asset.location, bbox_element(bbox)),
             )
         if search:
+            pattern = like_contains(search)
             stmt = stmt.where(
-                Asset.display_name.ilike(f"%{search}%") | Asset.external_id.ilike(f"%{search}%")
+                Asset.display_name.ilike(pattern, escape="\\")
+                | Asset.external_id.ilike(pattern, escape="\\")
             )
         if date_from is not None:
             stmt = stmt.where(Asset.last_observed_at >= date_from)

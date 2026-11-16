@@ -1,0 +1,13 @@
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YzllNjY3OS03NDI1LTQwZGUtOTQ0Yi1lMDdmYzFmOTBhZTciLCJyb2xlIjoiT1BFUkFUT1IiLCJleHAiOjE3OTQ3NDc2MDAsImlhdCI6MTc5NDc0NDAwMCwianRpIjoiZTBmMWEyYjMtYzRkNS00ZTZmLThhOWItMGMxZDJlM2Y0YTViIn0.c2lnbmF0dXJlLXBsYWNlaG9sZGVyLW5vdC1hLXJlYWwtdG9rZW4",
+  "token_type": "bearer",
+  "expires_in_minutes": 60,
+  "user": {
+    "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "username": "operator1",
+    "email": "operator1@mgts.example",
+    "role": "OPERATOR",
+    "is_active": true,
+    "created_at": "2026-10-01T09:00:00Z"
+  }
+}

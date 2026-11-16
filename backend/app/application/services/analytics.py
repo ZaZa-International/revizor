@@ -2,6 +2,8 @@
 
 Coverage is a transparent heuristic: a fixed grid over the configured survey
 area; a cell is covered when >=1 geolocated observation falls into it.
+Route observation counts are restricted to geolocated observations inside the
+configured demo area (same semantics as the coverage grid, ARCH-18).
 """
 
 from __future__ import annotations
@@ -10,7 +12,7 @@ import math
 from typing import Any
 
 from geoalchemy2 import Geometry
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
@@ -38,25 +40,30 @@ class AnalyticsService:
         ]
 
     async def overview(self) -> dict:
-        assets_total = (await self._session.execute(select(func.count(Asset.id)))).scalar_one()
-        observations_total = (
-            await self._session.execute(select(func.count(Observation.id)))
-        ).scalar_one()
-        defects_total = (await self._session.execute(select(func.count(Defect.id)))).scalar_one()
-        uploads_total = (await self._session.execute(select(func.count(Upload.id)))).scalar_one()
-        routes_total = (await self._session.execute(select(func.count(Route.id)))).scalar_one()
-        reviewed = (
+        totals = (
             await self._session.execute(
-                select(func.count(Observation.id)).where(
-                    Observation.review_status != ObservationReviewStatus.UNREVIEWED
+                select(
+                    select(func.count(Asset.id)).scalar_subquery(),
+                    select(func.count(Observation.id)).scalar_subquery(),
+                    select(func.count(Defect.id)).scalar_subquery(),
+                    select(func.count(Upload.id)).scalar_subquery(),
+                    select(func.count(Route.id)).scalar_subquery(),
+                    select(func.count(Observation.id))
+                    .where(Observation.review_status != ObservationReviewStatus.UNREVIEWED)
+                    .scalar_subquery(),
+                    select(func.count(Asset.id)).where(Asset.location.is_(None)).scalar_subquery(),
                 )
             )
-        ).scalar_one()
-        unlocated_assets = (
-            await self._session.execute(
-                select(func.count(Asset.id)).where(Asset.location.is_(None))
-            )
-        ).scalar_one()
+        ).one()
+        (
+            assets_total,
+            observations_total,
+            defects_total,
+            uploads_total,
+            routes_total,
+            reviewed,
+            unlocated_assets,
+        ) = totals
         return {
             "assets_total": assets_total,
             "observations_total": observations_total,
@@ -139,6 +146,7 @@ class AnalyticsService:
                 func.ST_Intersects(Observation.location, bbox_element(bbox)),
             )
             .group_by(cx, cy)
+            .order_by(cx, cy)
         )
         cells = (await self._session.execute(stmt)).all()
         covered = len(cells)
@@ -151,8 +159,16 @@ class AnalyticsService:
                     func.count(func.distinct(Observation.id)),
                 )
                 .outerjoin(ProcessingJob, ProcessingJob.route_id == Route.id)
-                .outerjoin(Observation, Observation.processing_job_id == ProcessingJob.id)
+                .outerjoin(
+                    Observation,
+                    and_(
+                        Observation.processing_job_id == ProcessingJob.id,
+                        Observation.location.is_not(None),
+                        func.ST_Intersects(Observation.location, bbox_element(bbox)),
+                    ),
+                )
                 .group_by(Route.id, Route.name)
+                .order_by(Route.name, Route.id)
             )
         ).all()
         return {

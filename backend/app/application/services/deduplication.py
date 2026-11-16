@@ -12,6 +12,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.interfaces.embeddings import EmbeddingSimilarityProvider
 from app.config import Settings
 from app.core import metrics
 from app.domain.assets.taxonomy import get_asset_type
@@ -23,17 +24,9 @@ from app.domain.deduplication.policy import (
 )
 from app.domain.enums import DeduplicationResult
 from app.domain.geospatial.models import GeoPoint
-from app.infrastructure.database.models.job import ProcessingJob
 from app.infrastructure.database.models.observation import Observation
 from app.infrastructure.database.repositories.assets import AssetRepository
 from app.infrastructure.database.repositories.observations import ObservationRepository
-
-
-class EmbeddingSimilarityProvider:
-    """Extension point for future visual-embedding matching (not used in MVP)."""
-
-    async def similarity(self, embedding_a: list[float], embedding_b: list[float]) -> float:
-        raise NotImplementedError
 
 
 class DeduplicationService:
@@ -47,6 +40,7 @@ class DeduplicationService:
         self._assets = AssetRepository(session)
         self._observations = ObservationRepository(session)
         self._embeddings = embeddings
+        self._max_candidates = settings.dedup_max_candidates
         self._config = DeduplicationConfig(
             radius_m=settings.dedup_radius_m,
             match_threshold=settings.dedup_match_threshold,
@@ -81,40 +75,40 @@ class DeduplicationService:
             time_window_hours=self._config.time_window_hours,
         )
         candidates = await self._assets.find_candidates(
-            point=point, radius_m=radius, asset_type=object_type
+            point=point, radius_m=radius, asset_type=object_type, limit=self._max_candidates
         )
         evidence: list[CandidateEvidence] = []
-        for asset, distance_m in candidates:
-            hours = None
-            if asset.last_observed_at is not None:
-                hours = max(0.0, (observed_at - asset.last_observed_at).total_seconds() / 3600.0)
-            same_route = False
-            if route_id is not None:
-                latest = await self._observations.latest_for_asset(asset.id)
-                if latest is not None:
-                    job = await self._session.get(ProcessingJob, latest.processing_job_id)
-                    same_route = job is not None and job.route_id == route_id
-            same_tracking = False
-            if tracking_id is not None:
-                stmt = select(Observation.id).where(
-                    Observation.asset_id == asset.id,
-                    Observation.processing_job_id == job_id,
-                    Observation.tracking_id == tracking_id,
-                )
-                same_tracking = (await self._session.execute(stmt)).first() is not None
-            visual = None
-            evidence.append(
-                CandidateEvidence(
-                    asset_id=str(asset.id),
-                    asset_type=asset.asset_type,
-                    distance_m=distance_m,
-                    hours_since_last_observation=hours,
-                    same_route=same_route,
-                    same_tracking_id=same_tracking,
-                    visual_similarity=visual,
-                    embedding_similarity=None,
-                )
+        if candidates:
+            candidate_ids = [asset.id for asset, _ in candidates]
+            latest = await self._observations.batch_latest_for_assets(candidate_ids)
+            on_route = (
+                await self._observations.assets_on_route(candidate_ids, route_id)
+                if route_id is not None
+                else set()
             )
+            with_tracking = (
+                await self._observations.assets_with_tracking(candidate_ids, job_id, tracking_id)
+                if tracking_id is not None
+                else set()
+            )
+            for asset, distance_m in candidates:
+                latest_row = latest.get(asset.id)
+                last_observed = latest_row[0] if latest_row is not None else asset.last_observed_at
+                hours = None
+                if last_observed is not None:
+                    hours = max(0.0, (observed_at - last_observed).total_seconds() / 3600.0)
+                evidence.append(
+                    CandidateEvidence(
+                        asset_id=str(asset.id),
+                        asset_type=asset.asset_type,
+                        distance_m=distance_m,
+                        hours_since_last_observation=hours,
+                        same_route=asset.id in on_route,
+                        same_tracking_id=asset.id in with_tracking,
+                        visual_similarity=None,
+                        embedding_similarity=None,
+                    )
+                )
         decision = decide(evidence, object_type=object_type, config=config)
         metrics.DEDUP_RESULTS.labels(decision.result.value).inc()
         return decision

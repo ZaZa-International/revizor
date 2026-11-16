@@ -1,0 +1,17 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - img "MGTS logo" [ref=e4]
+      - generic [ref=e5]: MGTS Infrastructure Intelligence
+      - generic [ref=e6]: API v0.1.0
+      - generic [ref=e7]: development
+    - navigation [ref=e8]:
+      - link "README" [ref=e9] [cursor=pointer]:
+        - /url: https://github.com/ZaZa-International/revizor#readme
+      - link "Архитектура" [ref=e10] [cursor=pointer]:
+        - /url: https://github.com/ZaZa-International/revizor/tree/main/docs/architecture
+      - link "API Overview" [ref=e11] [cursor=pointer]:
+        - /url: https://github.com/ZaZa-International/revizor/blob/main/docs/api/overview.md
+      - link "GitHub" [ref=e12] [cursor=pointer]:
+        - /url: https://github.com/ZaZa-International/revizor
+  - generic [ref=e13]: loading

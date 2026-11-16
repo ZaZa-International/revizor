@@ -22,6 +22,7 @@ htmlcov/
 .uv-cache/
 
 # Локальные данные приложения
+backups/
 var/
 backend/var/
 *.log

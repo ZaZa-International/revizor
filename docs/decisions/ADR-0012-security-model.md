@@ -80,3 +80,68 @@
    (любой может подделать токены); отклонено — production без секрета не стартует.
 5. **RS256/асимметричные JWT**: нужны ротация ключей и JWKS; для монолита с
    одним верификатором HS256 достаточно; отклонено для MVP.
+
+## Поправки 0.2.0 / Amendments (2026-11-16)
+
+По итогам аудита backend'а (docs/audit/backend-audit.md, волна 1) модель
+безопасности усилена. Исходные решения выше остаются в силе, кроме явно
+уточнённых пунктов.
+
+1. **Строгий production-валидатор секретов (SEC-3, уточнение п. 5)**:
+   отклоняются не только пустой `JWT_SECRET_KEY`, но и известные placeholder'ы
+   (`change-me-in-production`, `change-me-admin`, `changeme`, `secret`) и
+   длина < 32 символов; `BOOTSTRAP_ADMIN_PASSWORD` — пустой (bootstrap
+   пропускается) либо ≥ 12 символов и не placeholder; S3-credentials
+   `minioadmin` запрещены; `QUEUE_MODE=inline` запрещён; `'*'` в
+   `CORS_ORIGINS` запрещён в любом окружении (CORS с credentials отражал
+   любой Origin). `.env.example` содержит **пустые** секреты вместо
+   placeholder'ов. Обоснование: деплой «cp .env.example .env» с placeholder
+   давал публично известный HS256-секрет (форжинг токенов) и вход
+   admin/change-me-admin.
+2. **Logout и отзыв JWT (SEC-7, уточнение п. 2)**: `POST /api/v1/auth/logout`
+   + denylist `jti` в Redis (TTL = остаток до `exp`), проверка в
+   `get_current_user`. Решение: fail-open при недоступности Redis —
+   доступность API важнее отзыва; окно риска ограничено TTL токена (60 мин).
+   Альтернатива fail-closed отклонена: outage Redis клал бы все
+   аутентифицированные запросы. Refresh-токенов по-прежнему нет.
+3. **Медиа-URL только OPERATOR/ADMIN/SERVICE (SEC-8, уточнение п. 3)**:
+   VIEWER сохраняет чтение метаданных реестра (shared-read — осознанный
+   дизайн), но не получает presigned/image/crop URL и доступ к
+   `GET /files/{key}`. Обоснование: кадры не анонимизированы (`NOT_APPLIED`,
+   лица/номера); роль просмотра реестра не должна давать доступ к ПДн на
+   изображениях. Breaking pre-1.0.
+4. **Владение удалением загрузок (SEC-8)**: `DELETE /uploads/{id}` — только
+   загрузивший пользователь или ADMIN (403 иначе). Shared-read метаданных
+   сохраняется; владение удалением ранее не было определено.
+5. **Redacted cross-user dedup (SEC-8)**: повторная загрузка файла с чужим
+   checksum возвращает нейтральную запись (`id`, `created: false`) без чужих
+   метаданных и URL — закрыт «checksum oracle». Breaking pre-1.0.
+6. **Лимиты тел до аутентификации (SEC-1/2)**: ASGI-middleware отклоняет
+   oversized multipart/JSON (413) до буферизации и до auth-зависимостей:
+   FastAPI читает тело раньше разрешения зависимостей, поэтому лимиты в
+   handler'е не защищали от unauthenticated disk/memory exhaustion.
+   JSON-лимит — `MAX_JSON_BODY_BYTES` (2 MiB).
+7. **Per-username login throttle (SEC-6, уточнение п. 6)**: дополнительно к
+   IP-лимиту — 20/мин на username (`RATE_LIMIT_LOGIN_PER_USERNAME_PER_MINUTE`):
+   за proxy все клиенты делят IP (глобальный lockout), а ботнет обходил
+   IP-лимит per-account. In-memory fallback при недоступности Redis —
+   process-wide singleton (уточнение п. 6: раньше fallback был неэффективен).
+   Документирован `FORWARDED_ALLOW_IPS`.
+8. **Security headers (SEC-13)**: middleware отдаёт `X-Content-Type-Options:
+   nosniff`, `X-Frame-Options: DENY`, CSP `frame-ancestors 'none'`; HSTS — на
+   TLS-proxy. CORS wildcard запрещён (п. 1).
+9. **Presign GET-only + публичный endpoint (SEC-18, GEO-2)**: интерфейс
+   `generate_presigned_url` — только GET, expiry из
+   `S3_PRESIGN_EXPIRES_SECONDS`; отдельный client для presign с
+   `S3_PUBLIC_ENDPOINT_URL` (SigV4 подписывает Host — internal hostname в
+   ссылке недостижим из браузера). PUT-presign capability удалена.
+10. **Уточнение формулировки п. 10 (DOC-5)**: `pip-audit` в CI падает на
+    любой **известной уязвимости** (`continue-on-error: false`); флаг
+    `--strict` (падение также на непроаудированных зависимостях) — план
+    волны 3. Прежняя формулировка «в строгом режиме» была неточной.
+
+Следствия: матрица ролей обновлена (SECURITY.md), политики описаны в
+docs/security/privacy.md; breaking-изменения pre-1.0 зафиксированы в
+CHANGELOG. Цена: denylist добавляет Redis-зависимость на пути проверки токена
+(fail-open смягчает), VIEWER-интеграции теряют прямой доступ к изображениям
+(осознанный обмен удобства на приватность).

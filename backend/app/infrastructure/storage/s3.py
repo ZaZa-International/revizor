@@ -25,18 +25,31 @@ class S3Storage:
     def __init__(self, settings: Settings, client: Any | None = None) -> None:
         self._bucket = settings.s3_bucket
         self._presign_expires = settings.s3_presign_expires_seconds
+        config = Config(
+            signature_version="s3v4",
+            s3={"addressing_style": "path"},
+            retries={"max_attempts": 2, "mode": "standard"},
+            connect_timeout=10,
+            read_timeout=60,
+        )
         self._client = client or boto3.client(
             "s3",
             endpoint_url=settings.s3_endpoint_url,
             aws_access_key_id=settings.s3_access_key,
             aws_secret_access_key=settings.s3_secret_key,
             region_name=settings.s3_region,
-            config=Config(
-                signature_version="s3v4",
-                s3={"addressing_style": "path"},
-                retries={"max_attempts": 2, "mode": "standard"},
-            ),
+            config=config,
         )
+        self._presign_client = self._client
+        if client is None and settings.s3_public_endpoint_url:
+            self._presign_client = boto3.client(
+                "s3",
+                endpoint_url=settings.s3_public_endpoint_url,
+                aws_access_key_id=settings.s3_access_key,
+                aws_secret_access_key=settings.s3_secret_key,
+                region_name=settings.s3_region,
+                config=config,
+            )
 
     async def _run(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         try:
@@ -100,12 +113,13 @@ class S3Storage:
             return False
 
     async def generate_presigned_url(
-        self, key: str, expires_seconds: int = 3600, method: str = "GET"
+        self, key: str, expires_seconds: int | None = None, method: str = "GET"
     ) -> str:
-        client_method = "get_object" if method.upper() == "GET" else "put_object"
+        if method.upper() != "GET":
+            raise ValueError("Only GET presigned URLs are supported")
         url: str = await self._run(
-            self._client.generate_presigned_url,
-            ClientMethod=client_method,
+            self._presign_client.generate_presigned_url,
+            ClientMethod="get_object",
             Params={"Bucket": self._bucket, "Key": key},
             ExpiresIn=expires_seconds or self._presign_expires,
         )
@@ -120,3 +134,5 @@ class S3Storage:
 
     async def close(self) -> None:
         await anyio.to_thread.run_sync(self._client.close)
+        if self._presign_client is not self._client:
+            await anyio.to_thread.run_sync(self._presign_client.close)

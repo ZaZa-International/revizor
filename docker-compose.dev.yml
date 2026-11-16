@@ -1,14 +1,43 @@
+# Dev-override: публикация infra-портов на host ТОЛЬКО здесь (SEC-4).
+# Использование: docker compose -f docker-compose.yml -f docker-compose.dev.yml ...
+# Базовый docker-compose.yml оставляет db/redis/s3 во внутренней сети.
+
 services:
-  backend:
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+  db:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  s3:
+    ports:
+      - "9000:9000"
+      - "9333:9333"
+
+  # Bind mount, чтобы one-shot migrate применял миграции с host (как backend/worker).
+  migrate:
     volumes:
-      - ./backend:/app
+      - ./backend:/app:z
+
+  backend:
+    # OPS-7: --reload-dir ограничивает watcher каталогами app/ и migrations/
+    # (bind mount включает host .venv — без этого reload storm).
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app --reload-dir migrations
+    volumes:
+      - ./backend:/app:z
     environment:
       LOG_FORMAT: console
+      # GEO-2: presigned-ссылки должны указывать на host-порт, а не на http://s3:9000.
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
 
   worker:
     command: python -m app.workers.worker
+    ports:
+      - "9100:9100"
     volumes:
-      - ./backend:/app
+      - ./backend:/app:z
     environment:
       LOG_FORMAT: console
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:9000

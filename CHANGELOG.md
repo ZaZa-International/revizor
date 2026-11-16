@@ -7,6 +7,66 @@
 
 ## [Unreleased]
 
+### 0.2.0 — усиление безопасности и надёжности по аудиту backend'а
+
+Исправления аудита (`docs/audit/backend-audit.md`), Developer Portal, контрактное
+tooling, regression-тесты и production-hardening. Breaking pre-1.0 изменения
+перечислены ниже; все проверены локальным CI (`scripts/ci_local.sh`, 12/12 PASS).
+
+### Added
+
+#### Безопасность
+- `POST /api/v1/auth/logout` + denylist `jti` в Redis (TTL до `exp`), проверка при аутентификации; при недоступности Redis — fail-open (документировано).
+- Body-limit middleware: отказ 413 **до аутентификации** и без полной буферизации — multipart (`MAX_UPLOAD_SIZE_BYTES`) и JSON (`MAX_JSON_BODY_BYTES`, 2 MiB).
+- Security headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, CSP `frame-ancestors`; HSTS — на proxy.
+- Per-username throttle логина (`RATE_LIMIT_LOGIN_PER_USERNAME_PER_MINUTE=20`) в дополнение к IP-лимиту; in-memory fallback rate limiter'а при недоступности Redis (process-wide).
+- Строгий production-валидатор конфигурации: отказ старта при пустом/placeholder `JWT_SECRET_KEY` или длине < 32, placeholder/коротком (< 12) `BOOTSTRAP_ADMIN_PASSWORD`, S3-credentials `minioadmin`, `QUEUE_MODE=inline`, `'*'` в `CORS_ORIGINS`. `.env.example` — пустые секреты вместо placeholder'ов.
+- Защита от memory bomb в worker: probe размерности до decode, лимиты `PROCESSING_MAX_IMAGE_PIXELS` (64 Мп) / `PROCESSING_HARD_MAX_FRAME_SIDE` (8192), downscale кадра до `PROCESSING_MAX_FRAME_SIDE` (4096); оригинал в хранилище не изменяется, bbox — в пикселях сохранённого кадра.
+
+#### Надёжность и геоданные
+- Fencing исполнения job (advisory lock): двойная обработка живого job исключена; статус `PROCESSED` никогда не понижается в `FAILED`.
+- Stale-sweeper: зависшие `PROCESSING`/`QUEUED` без живого RQ-исполнения → `FAILED` (`stale_*`) через `RQ_JOB_TIMEOUT + STALE_JOB_GRACE_SECONDS` (1920 с по умолчанию); retry stale `PROCESSING` разрешён напрямую.
+- Write-ahead сохранение ML-ответа и детерминированный `request_id` — идемпотентность повторной инференции не зависит от провайдера.
+- Prometheus-метрики worker'а на `WORKER_METRICS_PORT` (9100).
+- `S3_PUBLIC_ENDPOINT_URL`: presign отдельным client'ом через публичный endpoint (браузер больше не получает internal hostname `s3`); presign только GET, expiry из `S3_PRESIGN_EXPIRES_SECONDS`.
+- GPS: UTC-нормализация naive timestamps (assume-UTC, job больше не падает); accuracy gate `GPS_MAX_ACCURACY_M` (50 м) → `ESTIMATED`; отклонение не-finite `accuracy_m`/`heading_deg`/`speed_mps`.
+- Дедупликация: батчинг evidence-запросов, `DEDUP_MAX_CANDIDATES=50`, grid advisory lock против конкурентных дублей, `same_route` по EXISTS (любой job наблюдения).
+- Скрипты `scripts/backup.sh` (pg_dump -Fc + S3 sync, retention 14 дампов) и `scripts/restore.sh` (подтверждение, pg_restore --clean --if-exists + S3 sync обратно); runbook restore-drill в deployment.md.
+
+#### API
+- Заголовок `X-Export-Truncated: true` при усечении экспорта лимитом 50 000 строк.
+- Пагинация (envelope `{items, total, page, page_size, pages}`) для кадров job и истории актива; фильтр по статусу кадров.
+- Валидация: неизвестный `sort_by` → 422 (вместо тихого fallback), `date_from > date_to` → 422, `Idempotency-Key` > 128 символов → 422.
+- Idempotency: fingerprint запроса — replay с другим payload → 409 `idempotency_conflict`; presigned-URL при replay перегенерируются (не протухшие).
+
+### Changed — breaking pre-1.0
+
+- **Кадры job и история актива**: вместо голых массивов — pagination envelope.
+- **VIEWER больше не получает медиа-URL** (presigned/image/crop) и доступ к `GET /files/{key}` — только метаданные; медиа доступны OPERATOR/ADMIN/SERVICE (кадры не анонимизированы).
+- **Cross-user дедупликация по checksum** возвращает нейтральную запись (`id`, `created: false`) без чужих метаданных и URL.
+- **Удаление загрузки** — только загрузивший пользователь или ADMIN (403 иначе).
+- **Неизвестный `sort_by`** → 422 вместо сортировки по умолчанию; инвертированный date-range → 422.
+- **Idempotency replay с другим payload** → 409 вместо возврата старого ответа.
+- **Presign только GET** (PUT-presign capability удалена).
+- **Базовый compose больше не публикует infra-порты** (5432/6379/9000/9333) на хост — только явный dev-override (`make dev`, bootstrap/test.sh используют его). API по-прежнему на 8000.
+
+### Fixed
+
+- REJECTED review: приоритет 0, состояние актива — из последнего неотклонённого состояния; записи истории REJECTED с `is_physical_change=False` (ADR-0007, поправка 0.2.0).
+- `scripts/test.sh`: Redis по умолчанию db **15** (FLUSHDB тестов больше не стирает dev-очередь в db 0).
+- Документация: полный inventory переменных в `.env.example`; testing.md — CI действительно поднимает S3 (localstack:4566), unit-тесты автономны, `TEST_DB_NAME` для параллельных прогонов; `DEBUG` документирован как флаг debug FastAPI; pip-audit переведён в `--strict` режим; исправлен mismatch имён файлов в инструкции по backup; слепое пятно swap-детекции (оба значения в диапазоне) документировано в geospatial.md.
+- Cancel job: refresh после flush (устранён MissingGreenlet 500 при успешной отмене).
+- Concurrent reviews: атомарный upsert training examples (ON CONFLICT) + advisory-lock идемпотентности — конкурентный replay с тем же ключом возвращает тот же review, а не 409.
+- Метрики worker'а: multiprocess-режим prometheus_client — счётчики fork'нутых work-horse реально агрегируются на `:9100/metrics` (ранее были невидимы из-за fork).
+
+### Added — волна 2/3 (Developer Portal, контракты, QA, DevOps)
+
+- **OpenAPI Developer Portal**: кастомный Swagger UI (`/docs`) в фирменной тёмно-синей/графитовой палитре MGTS (wordmark, версия, среда, ссылки на документацию, favicon), 14 упорядоченных секций с workflow-описаниями, описания всех 47 операций, стабильные operationId, 320+ примеров, декларации ошибок (401/403/404/409/422/429/5xx) с `ErrorResponse` вместо `HTTPValidationError`, typed GeoJSON/analytics/health схемы, binary media types для exports/files, enum-описания, `persistAuthorization` + рабочий Try it out (проверено в браузере).
+- **Contracts tooling**: `scripts/check_openapi.py` (drift live↔committed), `scripts/check_breaking.sh` (oasdiff против base-ветки), `scripts/generate_ts_client.sh` (openapi-typescript → `contracts/typescript/schema.d.ts` + openapi-fetch README), 18 эталонных примеров ответов `contracts/examples/api/`, контрактные тесты OpenAPI (29), `docs/api/` (7 документов: overview, authentication, errors, pagination-filtering, geospatial, upload-and-processing, workflows), `docs/integrations/README.md` — точка входа для frontend/ML команд.
+- **QA**: 164 новых теста — security regression (JWT tamper/alg-none/role-escalation, logout, ownership, VIEWER gating, redacted dedup, body limits 413, headers, NaN/Inf, CSV injection, per-username 429), полная role×endpoint matrix (119), failure modes (queue/Redis/S3/PG down, corrupted video, max size, stale recovery), concurrency (gather PATCH race, active-upload guard, idempotent review replay, concurrent dedup → 1 asset). Итого **661 тест**.
+- **DevOps**: one-shot `migrate` сервис с advisory lock (гонка миграций при scale исключена), Redis appendonly, `stop_grace_period` worker 300s, pin образов (seaweedfs:4.53, aws-cli:2.40.3, uv:0.13.8, localstack:4.3.0), s3-init с верификацией бакета, Dockerfile HEALTHCHECK + cleanup, CI: OpenAPI drift + TS drift + oasdiff breaking + smoke job, `pip-audit --strict`, `scripts/ci_local.sh` — полный локальный CI (12 шагов, все PASS), `scripts/smoke.sh` (end-to-end против стека), `scripts/load_smoke.py` (p50/p95/error-rate).
+- **Рефакторинг**: pipeline декомпозирован на оркестратор + `FramePersistence` + `JobProgressTracker`; N+1 устранены (batch StoredFile/defect counts/dedup evidence); `DefectService`/`RouteService`; общие pagination/serializer helpers.
+
 ## [0.1.0] - 2026-11-15
 
 Первый выпуск MVP: полный цикл drive-by инспекции телеком-инфраструктуры —

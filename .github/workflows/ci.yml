@@ -67,7 +67,7 @@ jobs:
           --health-timeout 5s
           --health-retries 12
       s3:
-        image: localstack/localstack:latest
+        image: localstack/localstack:4.3.0
         env:
           SERVICES: s3
         ports:
@@ -79,7 +79,9 @@ jobs:
           --health-retries 24
     env:
       DATABASE_URL: postgresql+asyncpg://mgts:mgts@localhost:5432/mgts_infra
-      REDIS_URL: redis://localhost:6379/0
+      # db 15 — изолированная логическая БД для тестов (conftest делает FLUSHDB);
+      # совпадает с scripts/test.sh и scripts/ci_local.sh.
+      REDIS_URL: redis://localhost:6379/15
       STORAGE_BACKEND: local
       STORAGE_LOCAL_PATH: /tmp/mgts-storage
       S3_ENDPOINT_URL: http://localhost:4566
@@ -112,6 +114,28 @@ jobs:
       - name: Migration roundtrip (downgrade base + upgrade head)
         run: uv run alembic downgrade base && uv run alembic upgrade head
 
+      - name: OpenAPI drift (committed schema vs app)
+        run: uv run python ../scripts/check_openapi.py
+
+      - name: TypeScript client drift
+        working-directory: ${{ github.workspace }}
+        run: |
+          npx --yes openapi-typescript contracts/openapi/openapi.json -o /tmp/schema.d.ts
+          diff -u contracts/typescript/schema.d.ts /tmp/schema.d.ts
+
+      - name: OpenAPI breaking changes (vs origin/main)
+        working-directory: ${{ github.workspace }}
+        run: |
+          git fetch origin main
+          if git show origin/main:contracts/openapi/openapi.json > /tmp/base.json 2>/dev/null; then
+            docker run --rm \
+              -v /tmp:/tmp \
+              -v "${{ github.workspace }}/contracts/openapi:/spec" \
+              tufin/oasdiff:latest breaking /tmp/base.json /spec/openapi.json
+          else
+            echo "No baseline contracts/openapi/openapi.json on origin/main — skipping breaking-change check"
+          fi
+
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
@@ -125,3 +149,70 @@ jobs:
 
       - name: Build backend image
         run: docker build -t mgts-infra-backend:ci backend/
+
+  smoke:
+    runs-on: ubuntu-latest
+    needs: [tests, docker-build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+        working-directory: backend
+
+      - name: Start full stack (base + dev override)
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+
+      - name: Wait for healthy stack (<=180s)
+        run: |
+          compose() { docker compose -f docker-compose.yml -f docker-compose.dev.yml "$@"; }
+          deadline=$((SECONDS + 180))
+          for svc in db redis s3 backend worker; do
+            while true; do
+              id="$(compose ps -q "$svc")"
+              status="$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || echo starting)"
+              if [ "$status" = "healthy" ]; then
+                echo "$svc: healthy"
+                break
+              fi
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "ERROR: $svc not healthy within 180s" >&2
+                compose ps
+                compose logs --tail=100
+                exit 1
+              fi
+              sleep 3
+            done
+          done
+
+      # BOOTSTRAP_ADMIN_PASSWORD пуст в .env.example → admin не создаётся;
+      # smoke работает под demo-operator, которого создаёт seed.
+      - name: Seed demo data (creates demo-operator)
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://mgts:mgts@localhost:5432/mgts_infra
+          REDIS_URL: redis://localhost:6379/0
+          S3_ENDPOINT_URL: http://localhost:9000
+        run: uv run python ../scripts/seed_demo.py
+
+      - name: Smoke tests
+        env:
+          BASE_URL: http://localhost:8000
+          SMOKE_USERNAME: demo-operator
+          SMOKE_PASSWORD: demo-operator-password
+        run: bash scripts/smoke.sh
+
+      - name: Compose logs (on failure)
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --tail=200
+
+      - name: Stop stack (volumes preserved)
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml down

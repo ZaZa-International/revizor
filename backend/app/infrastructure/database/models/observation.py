@@ -63,13 +63,16 @@ class Observation(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             unique=True,
             postgresql_where="detection_id IS NOT NULL",
         ),
+        Index("ix_observations_created_at", "created_at"),
+        Index("ix_observations_asset_observed", "asset_id", "observed_at"),
+        Index("ix_observations_review_observed", "review_status", "observed_at"),
     )
 
     asset_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True
     )
     processing_job_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("processing_jobs.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("processing_jobs.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     job_frame_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("job_frames.id", ondelete="SET NULL"), nullable=True

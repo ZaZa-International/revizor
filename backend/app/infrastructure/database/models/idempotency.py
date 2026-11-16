@@ -18,5 +18,6 @@ class IdempotencyRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     endpoint: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     response_status: Mapped[int] = mapped_column(Integer, nullable=False)
     response_body: Mapped[dict] = mapped_column(JSONB, nullable=False)

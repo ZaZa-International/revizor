@@ -5,6 +5,7 @@ services. Backend domain models never import ML frameworks. Coordinate system:
 bbox is in ABSOLUTE PIXEL coordinates of the source image (origin top-left).
 Geographic coordinates are ALWAYS (longitude, latitude), WGS84 / SRID 4326.
 """
+# ruff: noqa: RUF001, RUF002  # русскоязычная документация API: кириллица и тире намеренны (ложные срабатывания)
 
 from __future__ import annotations
 
@@ -85,11 +86,22 @@ class MLDetection(BaseModel):
 
 
 class MLModelInfo(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    """Идентификация активной ML-модели (контракт v1.0)."""
 
-    name: str
-    version: str
-    schema_version: str = ML_SCHEMA_VERSION
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {"name": "infrastructure-detector", "version": "1.2.0", "schema_version": "1.0"}
+            ]
+        },
+    )
+
+    name: str = Field(description="Имя модели", examples=["infrastructure-detector"])
+    version: str = Field(description="Версия модели", examples=["1.2.0"])
+    schema_version: str = Field(
+        default=ML_SCHEMA_VERSION, description="Версия ML-контракта", examples=["1.0"]
+    )
 
 
 class MLInferenceResponse(BaseModel):
@@ -143,9 +155,29 @@ class MLBatchResponse(BaseModel):
 
 
 class MLHealth(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    """Здоровье ML-провайдера со стороны backend (GET /api/v1/ml/health)."""
 
-    status: Literal["ok", "degraded", "unavailable"]
-    model_loaded: bool
-    provider: str
-    details: dict[str, Any] = Field(default_factory=dict)
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {"status": "ok", "model_loaded": True, "provider": "http", "details": {}},
+                {
+                    "status": "unavailable",
+                    "model_loaded": False,
+                    "provider": "http",
+                    "details": {"error": "ml_unavailable"},
+                },
+            ]
+        },
+    )
+
+    status: Literal["ok", "degraded", "unavailable"] = Field(
+        description="ok — провайдер доступен; degraded — работает с ограничениями; "
+        "unavailable — недоступен"
+    )
+    model_loaded: bool = Field(description="Загружена ли модель на стороне провайдера")
+    provider: str = Field(description="Провайдер: mock / http", examples=["http"])
+    details: dict[str, Any] = Field(
+        default_factory=dict, description="Дополнительные детали (код ошибки при отказе)"
+    )

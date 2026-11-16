@@ -8,14 +8,17 @@ active learning collection, no automatic retraining).
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.history import AssetHistoryService
 from app.application.services.risk import RiskScoringService
 from app.core.exceptions import ValidationAppError
+from app.domain.assets.taxonomy import is_known_asset_type
+from app.domain.defects.taxonomy import is_known_defect_type
 from app.domain.enums import (
     AuditAction,
     ConditionChangeSource,
@@ -23,10 +26,17 @@ from app.domain.enums import (
     ObservationReviewStatus,
     ReviewDecision,
 )
-from app.domain.reviews.logic import ReviewCorrection, apply_review, validate_review
+from app.domain.observations.condition import is_valid_condition
+from app.domain.reviews.logic import (
+    EffectiveObservationState,
+    ReviewCorrection,
+    apply_review,
+    validate_review,
+)
 from app.infrastructure.database.models.defect import Defect, defect_observations
 from app.infrastructure.database.models.observation import Observation
 from app.infrastructure.database.models.review import Review
+from app.infrastructure.database.models.stored_file import StoredFile
 from app.infrastructure.database.models.training import TrainingExample
 from app.infrastructure.database.repositories.assets import AssetRepository
 from app.infrastructure.database.repositories.defects import DefectRepository, ReviewRepository
@@ -40,6 +50,19 @@ _DECISION_TO_STATUS = {
     ReviewDecision.CORRECTED: ObservationReviewStatus.CORRECTED,
     ReviewDecision.NEEDS_MORE_INFORMATION: ObservationReviewStatus.NEEDS_MORE_INFORMATION,
 }
+
+_REVIEWED_AT_MAX_SKEW = timedelta(minutes=5)
+
+
+def validate_reviewed_at(reviewed_at: datetime | None) -> datetime | None:
+    """Normalize naive timestamps to UTC and reject future dates beyond clock skew."""
+    if reviewed_at is None:
+        return None
+    if reviewed_at.tzinfo is None:
+        reviewed_at = reviewed_at.replace(tzinfo=UTC)
+    if reviewed_at > datetime.now(UTC) + _REVIEWED_AT_MAX_SKEW:
+        raise ValidationAppError("reviewed_at must not be more than 5 minutes in the future")
+    return reviewed_at
 
 
 class ReviewService:
@@ -82,18 +105,19 @@ class ReviewService:
             validate_review(decision, correction, has_defect=defect is not None)
         except ValueError as exc:
             raise ValidationAppError(str(exc)) from exc
-        if correction.corrected_asset_type is not None:
-            from app.domain.assets.taxonomy import is_known_asset_type
-
-            if not is_known_asset_type(correction.corrected_asset_type):
-                raise ValidationAppError(f"Unknown asset type {correction.corrected_asset_type!r}")
-        if correction.corrected_defect_type is not None:
-            from app.domain.defects.taxonomy import is_known_defect_type
-
-            if not is_known_defect_type(correction.corrected_defect_type):
-                raise ValidationAppError(
-                    f"Unknown defect type {correction.corrected_defect_type!r}"
-                )
+        if correction.corrected_asset_type is not None and not is_known_asset_type(
+            correction.corrected_asset_type
+        ):
+            raise ValidationAppError(f"Unknown asset type {correction.corrected_asset_type!r}")
+        if correction.corrected_defect_type is not None and not is_known_defect_type(
+            correction.corrected_defect_type
+        ):
+            raise ValidationAppError(f"Unknown defect type {correction.corrected_defect_type!r}")
+        if correction.corrected_condition is not None and not is_valid_condition(
+            correction.corrected_condition
+        ):
+            raise ValidationAppError(f"Unknown condition {correction.corrected_condition!r}")
+        reviewed_at = validate_reviewed_at(reviewed_at)
 
         review = Review(
             observation_id=observation_id,
@@ -163,12 +187,14 @@ class ReviewService:
 
         if observation.asset_id is not None:
             asset = await self._assets.get_or_raise(observation.asset_id)
+            asset_type_changed = False
             if (
                 review.decision == ReviewDecision.CORRECTED
                 and correction.corrected_asset_type
                 and correction.corrected_asset_type != asset.asset_type
             ):
                 asset.asset_type = correction.corrected_asset_type
+                asset_type_changed = True
             assessment = self._risk.assess(
                 asset_type=effective.asset_type,
                 severity=effective.severity,
@@ -177,7 +203,7 @@ class ReviewService:
                 deduplication_result=observation.dedup_result,
                 manual_override=asset.priority_override,
             )
-            await self._history.record_change(
+            history_entry = await self._history.record_change(
                 asset=asset,
                 new_condition=effective.condition,
                 new_severity=effective.severity,
@@ -186,22 +212,21 @@ class ReviewService:
                 detected_at=review.reviewed_at,
                 observation_id=observation.id,
                 review_id=review.id,
+                review_decision=review.decision,
             )
             if not effective.is_rejected:
                 asset.current_condition = effective.condition
                 asset.current_severity = effective.severity
             self._risk.apply_to_asset(asset, assessment)
+            if asset_type_changed or history_entry is not None:
+                asset.version += 1
 
     async def _upsert_training_example(
         self, observation: Observation, review: Review, effective: object
     ) -> None:
-        from app.domain.reviews.logic import EffectiveObservationState
-
         assert isinstance(effective, EffectiveObservationState)
         image_key = None
         if observation.image_id is not None:
-            from app.infrastructure.database.models.stored_file import StoredFile
-
             stored = await self._session.get(StoredFile, observation.image_id)
             image_key = stored.storage_key if stored else None
         if image_key is None:
@@ -216,20 +241,20 @@ class ReviewService:
             "image_height": observation.image_height,
             "review_decision": review.decision.value,
         }
-        existing = await self._training.get_by_observation(observation.id)
-        if existing is not None:
-            existing.review_id = review.id
-            existing.label = label
-            existing.image_storage_key = image_key
-        else:
-            self._training.add(
-                TrainingExample(
-                    observation_id=observation.id,
-                    review_id=review.id,
-                    image_storage_key=image_key,
-                    label=label,
-                )
+        stmt = (
+            pg_insert(TrainingExample)
+            .values(
+                observation_id=observation.id,
+                review_id=review.id,
+                image_storage_key=image_key,
+                label=label,
             )
+            .on_conflict_do_update(
+                index_elements=["observation_id"],
+                set_={"review_id": review.id, "label": label, "image_storage_key": image_key},
+            )
+        )
+        await self._session.execute(stmt)
 
     async def _apply_to_defect(
         self,

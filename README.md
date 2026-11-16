@@ -39,39 +39,55 @@ structlog · Prometheus · OpenTelemetry (опционально) · Argon2id + 
 Требования: Docker + Compose v2, [uv](https://docs.astral.sh/uv/), Python 3.12 (uv поставит сам).
 
 ```bash
-./scripts/bootstrap.sh     # .env, зависимости, db/redis/s3, миграции
+./scripts/bootstrap.sh     # .env, зависимости, infra (dev-override), миграции
 make dev                   # API + worker с hot reload (compose dev)
 # либо полный стек в контейнерах:
-make up                    # сборка образа, миграции, backend + worker
+make up                    # сборка образа, one-shot migrate, backend + worker
 make seed                  # синтетические демо-данные (15 assets, 3 маршрута, reviews)
 ```
 
-- Swagger UI: http://localhost:8000/docs
-- OpenAPI JSON: http://localhost:8000/openapi.json (экспорт: `make openapi`)
-- Health: `/health`, `/health/live`, `/health/ready` · Metrics: `/metrics`
+> Безопасность по умолчанию: базовый compose **не публикует** порты PostgreSQL/Redis/S3
+> на хост (только API 8000). Локальная разработка с хоста использует dev-override
+> (`make dev`, bootstrap/test.sh подключают его автоматически).
+
+- **Developer Portal (Swagger UI)**: http://localhost:8000/docs — фирменный интерфейс,
+  14 разделов, примеры, Try it out с persistAuthorization.
+- OpenAPI JSON: http://localhost:8000/openapi.json (экспорт: `make openapi`,
+  drift-check: `make openapi-check`, breaking: `make breaking-check`,
+  TypeScript-клиент: `make ts-client`)
+- Health: `/health`, `/health/live`, `/health/ready` · Metrics API: `/metrics` ·
+  Metrics worker: `:9100/metrics` (dev-override)
 - Демо-вход: `admin` / пароль из `.env` (`BOOTSTRAP_ADMIN_PASSWORD`) либо
   `demo-operator` / `demo-operator-password` (создаётся seed-скриптом, только dev).
+- Logout: `POST /api/v1/auth/logout` (отзыв токена через jti denylist).
 
-`.env` создаётся из `.env.example`. **В production `JWT_SECRET_KEY` обязателен** —
-без него приложение не стартует. Секреты не коммитятся.
+`.env` создаётся из `.env.example` (секреты пустые). **В production валидатор отклоняет
+placeholder-секреты**: `JWT_SECRET_KEY` ≥32 символов, S3-credentials не `minioadmin`,
+`QUEUE_MODE` не `inline`, CORS без `*`. Секреты не коммитятся.
 
 ## Основные команды
 
 | Команда | Действие |
 |---|---|
-| `make up` / `make down` | полный стек в Docker |
-| `make dev` | infra в Docker + API/worker с hot reload |
+| `make up` / `make down` | полный стек в Docker (infra без host-портов) |
+| `make dev` | infra с портами + API/worker с hot reload |
 | `make migrate` | `alembic upgrade head` |
 | `make seed` | демо-данные |
 | `make test` | все тесты (поднимает infra, coverage) |
 | `make lint` | ruff check + format check + mypy |
-| `make openapi` | экспорт `contracts/openapi/openapi.json` |
+| `make openapi` / `openapi-check` | экспорт / drift-check OpenAPI |
+| `make ts-client` / `breaking-check` | TypeScript-клиент / oasdiff breaking |
+| `bash scripts/ci_local.sh` | полный локальный CI (12 шагов) |
+| `bash scripts/smoke.sh` | end-to-end smoke против стека |
+| `bash scripts/backup.sh` / `restore.sh` | backup/restore PostgreSQL + S3 |
 
 ## Тесты
 
-262 теста: unit (доменная логика), integration (реальные PostgreSQL/PostGIS, Redis, S3),
-API (все endpoints), contract (ML JSON Schema + frontend-контракты).
-SQLite не используется. Тестовая БД `mgts_infra_test` создаётся и мигрируется автоматически.
+**661 тест**: unit (доменная логика, автономны), integration (реальные PostgreSQL/PostGIS,
+Redis, S3), API (все endpoints + security regression + role matrix), contract
+(ML JSON Schema + OpenAPI + frontend-контракты), concurrency/failure-modes.
+SQLite не используется. Тестовая БД `mgts_infra_test` создаётся и мигрируется автоматически;
+`TEST_DB_NAME` — изоляция параллельных прогонов.
 
 ```bash
 cd backend
@@ -101,11 +117,13 @@ uv run pytest                  # всё (нужны db/redis/s3 из compose)
 | Архитектура | [system-overview](docs/architecture/system-overview.md), [data-flow](docs/architecture/data-flow.md), [domain-model](docs/architecture/domain-model.md), [диаграммы](docs/architecture/sequence-diagrams.md) |
 | База данных | [schema](docs/database/schema.md), [geospatial](docs/database/geospatial.md) |
 | ML-интеграция | [ml-contract](docs/integrations/ml-contract.md), [примеры](docs/integrations/ml-examples/), [JSON Schema](contracts/ml/) |
-| Frontend | [frontend-contract](docs/integrations/frontend-contract.md), [OpenAPI](contracts/openapi/openapi.json) |
+| API (Developer Portal) | [overview](docs/api/overview.md), [authentication](docs/api/authentication.md), [errors](docs/api/errors.md), [pagination/filtering](docs/api/pagination-filtering.md), [geospatial](docs/api/geospatial.md), [upload & processing](docs/api/upload-and-processing.md), [workflows](docs/api/workflows.md) |
+| Frontend | [integrations README](docs/integrations/README.md), [frontend-contract](docs/integrations/frontend-contract.md), [OpenAPI](contracts/openapi/openapi.json), [TypeScript](contracts/typescript/) |
 | Хранилище | [storage](docs/integrations/storage.md) |
 | Эксплуатация | [local-development](docs/operations/local-development.md), [deployment](docs/operations/deployment.md), [troubleshooting](docs/operations/troubleshooting.md) |
 | Разработка | [testing](docs/development/testing.md), [новый тип объекта](docs/development/adding-new-asset-type.md), [новый дефект](docs/development/adding-new-defect-type.md), [новый ML-провайдер](docs/development/adding-new-ml-provider.md) |
 | Решения | [ADR-0001…0012](docs/decisions/) |
+| Аудит | [backend-audit](docs/audit/backend-audit.md) (регистр находок + статусы исправлений) |
 | Безопасность | [SECURITY.md](SECURITY.md), [privacy](docs/security/privacy.md) |
 | Для coding agents | [AGENTS.md](AGENTS.md) |
 | Исследование | [industry-research](docs/research/industry-research.md) |
@@ -115,8 +133,9 @@ uv run pytest                  # всё (нужны db/redis/s3 из compose)
 - **Backend**: этот репозиторий; точки расширения — интерфейсы в `app/application/interfaces/`.
 - **ML**: реализуйте 4 endpoint'а по [контракту v1.0](docs/integrations/ml-contract.md),
   подключите через `ML_PROVIDER=http`. Доменные модели менять не нужно.
-- **Frontend**: [frontend-contract](docs/integrations/frontend-contract.md) + OpenAPI →
-  генерация TypeScript-клиента (`openapi-typescript` / `orval`).
+- **Frontend**: [integrations README](docs/integrations/README.md) + OpenAPI →
+  `make ts-client` (openapi-typescript + openapi-fetch); drift/breaking контролируются
+  `make openapi-check` / `make breaking-check` и CI.
 
 ## Лицензия
 

@@ -1,0 +1,18 @@
+{
+  "id": "16fd2706-8baf-433b-82eb-8c7fada847da",
+  "upload_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "route_id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
+  "status": "COMPLETED",
+  "progress": 1.0,
+  "current_stage": "COMPLETED",
+  "total_frames": 12,
+  "processed_frames": 11,
+  "failed_frames": 0,
+  "rejected_frames": 1,
+  "started_at": "2026-11-15T12:01:00Z",
+  "finished_at": "2026-11-15T12:04:40Z",
+  "error_code": null,
+  "error_message": null,
+  "created_at": "2026-11-15T12:00:30Z",
+  "updated_at": "2026-11-15T12:04:40Z"
+}

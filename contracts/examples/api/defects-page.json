@@ -1,0 +1,36 @@
+{
+  "items": [
+    {
+      "id": "9f8e7d6c-5b4a-4321-9876-543210fedcba",
+      "asset_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "defect_type": "missing_cover",
+      "description": "Отсутствует крышка кабельного колодца, открыт люк. Требуется срочный выезд аварийной бригады.",
+      "severity": 5,
+      "status": "CONFIRMED",
+      "first_detected_at": "2026-11-15T12:04:32Z",
+      "last_detected_at": "2026-11-15T12:04:32Z",
+      "resolved_at": null,
+      "created_at": "2026-11-15T12:04:32Z",
+      "updated_at": "2026-11-15T12:10:00Z",
+      "observation_count": 1
+    },
+    {
+      "id": "8e7d6c5b-4a39-4210-8765-43210fedcba9",
+      "asset_id": "3d9f1a2b-4c5d-4e6f-8a9b-0c1d2e3f4a5b",
+      "defect_type": "cabinet_door_open",
+      "description": null,
+      "severity": 3,
+      "status": "OPEN",
+      "first_detected_at": "2026-11-15T12:04:35Z",
+      "last_detected_at": "2026-11-15T12:04:35Z",
+      "resolved_at": null,
+      "created_at": "2026-11-15T12:04:35Z",
+      "updated_at": "2026-11-15T12:04:35Z",
+      "observation_count": 1
+    }
+  ],
+  "total": 2,
+  "page": 1,
+  "page_size": 20,
+  "pages": 1
+}

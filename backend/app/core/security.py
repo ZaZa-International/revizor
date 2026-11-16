@@ -19,6 +19,9 @@ def hash_password(password: str) -> str:
     return _hasher.hash(password)
 
 
+DUMMY_PASSWORD_HASH = hash_password("dummy-timing-equalizer")
+
+
 def verify_password(password: str, password_hash: str) -> bool:
     try:
         return _hasher.verify(password_hash, password)

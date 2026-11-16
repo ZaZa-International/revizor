@@ -1,4 +1,5 @@
 """Health and readiness endpoints."""
+# ruff: noqa: RUF001  # русскоязычная документация API: кириллица и тире намеренны (ложные срабатывания)
 
 from __future__ import annotations
 
@@ -8,12 +9,26 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from app.api.route import DocumentedRoute
 from app.config import get_settings
+from app.schemas.health import HealthResponse, LiveResponse, ReadyResponse
 
-router = APIRouter(tags=["health"])
+router = APIRouter(tags=["System & Health"], route_class=DocumentedRoute)
 
 
-@router.get("/health/live", summary="Liveness probe")
+@router.get(
+    "/health/live",
+    response_model=LiveResponse,
+    summary="Liveness-проба: процесс жив",
+    description=(
+        "Мгновенная проверка жизнеспособности процесса без обращения к зависимостям.\n\n"
+        '- **200** — процесс отвечает (`{"status": "ok"}`).\n'
+        "- Используется оркестраторами для restart-политик; не требует аутентификации.\n"
+        "- Отказ компонентов (БД/Redis/S3/ML) на этот endpoint не влияет — "
+        "для готовности используйте `/health/ready`.\n\n"
+        "См. docs/api/overview.md."
+    ),
+)
 async def live() -> dict:
     return {"status": "ok"}
 
@@ -47,7 +62,28 @@ async def _check_components(request: Request) -> dict:
     return components
 
 
-@router.get("/health/ready", summary="Readiness probe (DB, Redis, storage)")
+@router.get(
+    "/health/ready",
+    response_model=ReadyResponse,
+    summary="Readiness-проба: БД, Redis, хранилище",
+    description=(
+        "Проверка готовности принимать трафик: опрашиваются PostgreSQL (`SELECT 1`), "
+        "Redis (`PING`) и хранилище (probe-объект), дополнительно ML.\n\n"
+        "- **200** — все критичные компоненты (database, redis, storage) в статусе ok.\n"
+        "- **503** — отказ хотя бы одного критичного компонента (`status: not_ready`); "
+        "тело ответа содержит статус каждого компонента и латентность проверки БД.\n"
+        "- ML не является критичным компонентом: его отказ не даёт 503 "
+        "(смотрите агрегированный `/health`).\n"
+        "- Не требует аутентификации; пригоден для readiness-проб балансировщика.\n\n"
+        "См. docs/api/overview.md."
+    ),
+    responses={
+        503: {
+            "model": ReadyResponse,
+            "description": "Критичный компонент недоступен (database/redis/storage)",
+        }
+    },
+)
 async def ready(request: Request) -> JSONResponse:
     components = await _check_components(request)
     critical = ("database", "redis", "storage")
@@ -58,7 +94,28 @@ async def ready(request: Request) -> JSONResponse:
     )
 
 
-@router.get("/health", summary="Aggregate health with component details")
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="Агрегированное здоровье сервиса",
+    description=(
+        "Полная картина здоровья: имя сервиса, версия, окружение и статусы "
+        "компонентов (database, redis, storage, ml).\n\n"
+        "- **200** `status: ok` — все компоненты в порядке.\n"
+        "- **200** `status: degraded` — критичные компоненты в порядке, "
+        "но ML недоступен/деградировал (обработка новых job'ов невозможна).\n"
+        "- **503** `status: not_ready` — отказ критичного компонента "
+        "(database/redis/storage).\n"
+        "- Не требует аутентификации; используется мониторингом и дашбордами.\n\n"
+        "См. docs/api/overview.md и docs/api/errors.md."
+    ),
+    responses={
+        503: {
+            "model": HealthResponse,
+            "description": "Критичный компонент недоступен (database/redis/storage)",
+        }
+    },
+)
 async def health(request: Request) -> JSONResponse:
     settings = get_settings()
     components = await _check_components(request)

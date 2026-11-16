@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from geoalchemy2 import Geography
-from sqlalchemy import Float, String
+from sqlalchemy import Float, Index, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 class Route(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "routes"
+    __table_args__ = (Index("ix_routes_created_at", "created_at"),)
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     vehicle_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

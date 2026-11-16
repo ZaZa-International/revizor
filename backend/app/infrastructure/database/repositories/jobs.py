@@ -86,6 +86,20 @@ class JobFrameRepository(BaseRepository[JobFrame]):
         )
         return list((await self.session.execute(stmt)).scalars().all())
 
+    async def paginated(
+        self,
+        job_id: uuid.UUID,
+        *,
+        page: int,
+        page_size: int,
+        status: FrameStatus | None = None,
+    ) -> Page[JobFrame]:
+        stmt = select(JobFrame).where(JobFrame.job_id == job_id)
+        if status is not None:
+            stmt = stmt.where(JobFrame.status == status)
+        stmt = stmt.order_by(JobFrame.frame_index.asc())
+        return await paginate(self.session, stmt, page=page, page_size=page_size)
+
     async def count_by_status(self, job_id: uuid.UUID, status: FrameStatus) -> int:
         from sqlalchemy import func
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -50,6 +51,18 @@ class DefectRepository(BaseRepository[Defect]):
             .where(defect_observations.c.defect_id == defect_id)
         )
         return int((await self.session.execute(stmt)).scalar_one())
+
+    async def observation_counts(self, defect_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, int]:
+        """Batch observation counts for a page of defects (single GROUP BY)."""
+        if not defect_ids:
+            return {}
+        stmt = (
+            select(defect_observations.c.defect_id, func.count())
+            .where(defect_observations.c.defect_id.in_(defect_ids))
+            .group_by(defect_observations.c.defect_id)
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return {row[0]: int(row[1]) for row in rows}
 
     def filtered_stmt(
         self,
@@ -106,23 +119,6 @@ class DefectRepository(BaseRepository[Defect]):
 class ReviewRepository(BaseRepository[Review]):
     model = Review
     entity_name = "Review"
-
-    async def latest_for_observation(self, observation_id: uuid.UUID) -> Review | None:
-        stmt = (
-            select(Review)
-            .where(Review.observation_id == observation_id)
-            .order_by(Review.reviewed_at.desc(), Review.created_at.desc())
-            .limit(1)
-        )
-        return (await self.session.execute(stmt)).scalar_one_or_none()
-
-    async def list_for_observation(self, observation_id: uuid.UUID) -> list[Review]:
-        stmt = (
-            select(Review)
-            .where(Review.observation_id == observation_id)
-            .order_by(Review.reviewed_at.asc())
-        )
-        return list((await self.session.execute(stmt)).scalars().all())
 
     def filtered_stmt(
         self,

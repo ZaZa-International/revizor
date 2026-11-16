@@ -1,17 +1,25 @@
-"""Asset registry operations: read, manual patch (optimistic locking), history."""
+"""Asset registry operations: manual patch with optimistic locking.
+
+PATCH values use presence semantics (exclude_unset): an explicit null clears
+a field; clearing priority_override also clears priority_override_reason.
+"""
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.history import AssetHistoryService
 from app.application.services.risk import RiskScoringService
 from app.core.exceptions import ConflictError, ValidationAppError
-from app.domain.enums import AuditAction, ConditionChangeSource, GeolocationStatus
+from app.domain.enums import (
+    AuditAction,
+    ConditionChangeSource,
+    GeolocationStatus,
+    LifecycleStatus,
+)
 from app.domain.geospatial.models import GeoPoint
 from app.infrastructure.database.models.asset import Asset
 from app.infrastructure.database.repositories.assets import AssetRepository, point_element
@@ -62,9 +70,7 @@ class AssetService:
         updates: dict = {}
         for field in _PATCHABLE & set(values):
             value = values[field]
-            if field == "lifecycle_status":
-                from app.domain.enums import LifecycleStatus
-
+            if field == "lifecycle_status" and value is not None:
                 value = LifecycleStatus(value)
             if field == "priority_override" and value is not None:
                 if not 0 <= value <= 100:
@@ -74,6 +80,9 @@ class AssetService:
                         "priority_override_reason is required when overriding priority"
                     )
             updates[field] = value
+
+        if "priority_override" in values and values["priority_override"] is None:
+            updates["priority_override_reason"] = None
 
         if "location" in values and values["location"] is not None:
             loc = values["location"]
@@ -108,17 +117,7 @@ class AssetService:
 
         if not updates:
             return asset
-        updates["version"] = asset.version + 1
-        stmt = (
-            update(Asset)
-            .where(Asset.id == asset.id, Asset.version == asset.version)
-            .values(**updates)
-            .returning(Asset.id)
-        )
-        result = await self._session.execute(stmt)
-        if result.first() is None:
-            raise ConflictError("Asset was modified concurrently; reload and retry")
-        await self._session.refresh(asset)
+        asset = await self._assets.update_with_version(asset, asset.version, updates)
         self._audit.record(
             actor_id=actor_id,
             action=AuditAction.UPDATE.value,
@@ -129,7 +128,3 @@ class AssetService:
         )
         await self._session.flush()
         return asset
-
-    async def get_history(self, asset_id: uuid.UUID) -> list:
-        await self._assets.get_or_raise(asset_id)
-        return await self._history.list_for_asset(asset_id)
