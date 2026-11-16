@@ -7,6 +7,42 @@
 
 ## [Unreleased]
 
+### Геопространственная подсистема — 2D/3D карта инфраструктуры
+
+Единая геопространственная система: 2D и 3D — режимы одной карты MapLibre, общее
+состояние в URL, адаптер геоданных, inspection-панели, демо-сценарий. Документы:
+`docs/geospatial-{audit,technology-review,architecture,data-contract,performance,qa}.md`.
+
+#### Added
+- 3D City Mode: векторный basemap OpenFreeMap (self-hosted графитовый стиль
+  `frontend/public/styles/revizor-dark.json`), объёмные здания из реальных высот OSM
+  (`render_height`/`render_min_height`, fill-extrusion), камера pitch/bearing/compass,
+  плавные переходы 2D↔3D без сброса выбора и фильтров.
+- Единое состояние карты (`src/geo/state.ts`): mode/view/camera/layers/filters/
+  selection/timeRange в URL; deep-link и reload восстанавливают режим, камеру и объект.
+- Geospatial data adapter (`src/geo/`): валидация RFC 7946 `[lon,lat]` WGS84,
+  swap-эвристика, нормализация, разделение domain/presentation, кольца неопределённости
+  GPS (`location_accuracy_m`), геопривязка сетки покрытия `/analytics/coverage`.
+- Infrastructure view: слои assets/observations/defects/routes/coverage, тепловая карта
+  плотности наблюдений, гексагональная агрегация дефектов (deck.gl, lazy, interleaved —
+  один WebGL-контекст), фильтр периода наблюдений.
+- Inspection-панели: паспорт актива (вкладки наблюдения/дефекты/история/сравнение
+  объездов), наблюдение (кадр, confidence/severity/priority раздельно, подтверждение
+  оператором), дефект, маршрут.
+- Infrastructure Inspection Walkthrough: 10-шаговый DEMO-сценарий (play/pause/next/
+  prev/exit), подтверждение только по явному клику, без реальных мутаций.
+- Viewport-loading по bbox (`moveend`), `keepPreviousData` (карта не мигает при refetch).
+- Тесты: 23 unit (`src/tests/geo.test.ts`), e2e `map-geospatial.spec.ts` (9) и
+  `map-failures.spec.ts` (5); скрипт замеров `scripts/map-perf.mjs`.
+
+#### Changed
+- Basemap по умолчанию: векторные тайлы OpenFreeMap вместо raster Esri; Esri raster
+  сохранён как fallback, SVG-схема — при отказе WebGL. Attribution ODbL сохранён.
+- `GET /api/v1/map/{assets,defects,routes}`: детерминированная сортировка
+  (assets — priority desc, defects — severity desc, routes — started_at desc).
+- `GET /api/v1/map/routes`: добавлены `bbox`, `date_from`/`date_to` (по `started_at`);
+  маршруты без трека исключаются (исправлено описание контракта). Additive, не breaking.
+
 ### 0.2.0 — усиление безопасности и надёжности по аудиту backend'а
 
 Исправления аудита (`docs/audit/backend-audit.md`), Developer Portal, контрактное

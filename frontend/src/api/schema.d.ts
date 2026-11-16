@@ -794,7 +794,7 @@ export interface paths {
          *     - **200** — `{type: FeatureCollection, features: [...]}`; геометрия Point, координаты строго `[longitude, latitude]` (WGS84). Properties: id, asset_type, display_name, current_condition/severity/priority, priority_band, geolocation_status, location_accuracy_m, lifecycle_status, last_observed_at.
          *     - `bbox` — `min_lon,min_lat,max_lon,max_lat` (порядок lon/lat); невалидный формат → 422.
          *     - `priority_band` — типизированный enum (невалидное значение → 422).
-         *     - `limit` — 1–5000 (по умолчанию 1000); выборка детерминирована.
+         *     - `limit` — 1–5000 (по умолчанию 1000); выборка детерминирована (current_priority desc nulls last, id asc).
          *
          *     Объекты без GPS (geolocation_status=UNAVAILABLE) в слой не попадают — показывайте их в списочном представлении `/assets`. См. docs/api/geospatial.md, docs/api/workflows.md.
          */
@@ -822,7 +822,7 @@ export interface paths {
          *     - `bbox` — `min_lon,min_lat,max_lon,max_lat`; невалидный формат → 422.
          *     - `status` — OPEN/CONFIRMED/IN_PROGRESS/RESOLVED/REJECTED.
          *     - `severity_min` — нижняя граница тяжести 1–5.
-         *     - `limit` — 1–5000 (по умолчанию 1000).
+         *     - `limit` — 1–5000 (по умолчанию 1000); выборка детерминирована (severity desc, id asc).
          *
          *     Дефекты наследуют координаты актива; активы без GPS не отображаются. См. docs/api/geospatial.md.
          */
@@ -849,7 +849,7 @@ export interface paths {
          *     - **200** — FeatureCollection; геометрия Point `[lon, lat]`. Properties: id, asset_id, object_type, condition_class, detector_confidence, review_status, dedup_result, observed_at, processing_job_id.
          *     - `job_id` — UUID job (фильтр по processing_job_id).
          *     - `date_from`/`date_to` фильтруют по **observed_at** (включительно); date_from > date_to → 422.
-         *     - `bbox` — `min_lon,min_lat,max_lon,max_lat`; `limit` — 1–5000.
+         *     - `bbox` — `min_lon,min_lat,max_lon,max_lat`; `limit` — 1–5000 (выборка детерминирована: observed_at desc, id asc).
          *
          *     Наблюдения без геопривязки в слой не попадают. См. docs/api/geospatial.md, docs/api/upload-and-processing.md.
          */
@@ -874,9 +874,11 @@ export interface paths {
          * @description Слой треков объездов для карты: геометрия LineString из PostGIS.
          *
          *     - **200** — FeatureCollection; координаты трека — упорядоченные пары `[longitude, latitude]`. Properties: id, name, vehicle_id, started_at/finished_at, total_distance_m (метры, ST_Length).
-         *     - `limit` — 1–1000 (по умолчанию 100).
+         *     - `bbox` — `min_lon,min_lat,max_lon,max_lat` (пересечение трека с bbox); невалидный формат → 422.
+         *     - `date_from`/`date_to` фильтруют по **started_at** (включительно); date_from > date_to → 422.
+         *     - `limit` — 1–1000 (по умолчанию 100); выборка детерминирована (started_at desc, id asc).
          *
-         *     Маршруты без трека возвращаются с geometry=null. Используется вместе со слоем наблюдений для визуализации покрытия объезда. См. docs/api/geospatial.md.
+         *     Маршруты без трека в слой не попадают. Используется вместе со слоем наблюдений для визуализации покрытия объезда. См. docs/api/geospatial.md.
          */
         get: operations["map_routes"];
         put?: never;
@@ -7477,6 +7479,12 @@ export interface operations {
     map_routes: {
         parameters: {
             query?: {
+                /** @description Географический фильтр bbox: `min_lon,min_lat,max_lon,max_lat` (WGS84, порядок координат lon/lat). Пример: 37.55,55.70,37.70,55.80 */
+                bbox?: string | null;
+                /** @description Нижняя граница started_at (ISO 8601, включительно) */
+                date_from?: string | null;
+                /** @description Верхняя граница started_at (ISO 8601, включительно) */
+                date_to?: string | null;
                 /** @description Максимум маршрутов (1–1000, по умолчанию 100) */
                 limit?: number;
             };

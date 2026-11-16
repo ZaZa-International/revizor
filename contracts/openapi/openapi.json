@@ -4277,7 +4277,7 @@
           "Geospatial & Maps"
         ],
         "summary": "Слой активов (GeoJSON FeatureCollection)",
-        "description": "Шаг 8 сквозного сценария (login → upload → job → poll → observations → asset → review → **map** → export). Слой активов для MapLibre/любого GIS-frontend: типизированный GeoJSON FeatureCollection (RFC 7946).\n\n- **200** — `{type: FeatureCollection, features: [...]}`; геометрия Point, координаты строго `[longitude, latitude]` (WGS84). Properties: id, asset_type, display_name, current_condition/severity/priority, priority_band, geolocation_status, location_accuracy_m, lifecycle_status, last_observed_at.\n- `bbox` — `min_lon,min_lat,max_lon,max_lat` (порядок lon/lat); невалидный формат → 422.\n- `priority_band` — типизированный enum (невалидное значение → 422).\n- `limit` — 1–5000 (по умолчанию 1000); выборка детерминирована.\n\nОбъекты без GPS (geolocation_status=UNAVAILABLE) в слой не попадают — показывайте их в списочном представлении `/assets`. См. docs/api/geospatial.md, docs/api/workflows.md.",
+        "description": "Шаг 8 сквозного сценария (login → upload → job → poll → observations → asset → review → **map** → export). Слой активов для MapLibre/любого GIS-frontend: типизированный GeoJSON FeatureCollection (RFC 7946).\n\n- **200** — `{type: FeatureCollection, features: [...]}`; геометрия Point, координаты строго `[longitude, latitude]` (WGS84). Properties: id, asset_type, display_name, current_condition/severity/priority, priority_band, geolocation_status, location_accuracy_m, lifecycle_status, last_observed_at.\n- `bbox` — `min_lon,min_lat,max_lon,max_lat` (порядок lon/lat); невалидный формат → 422.\n- `priority_band` — типизированный enum (невалидное значение → 422).\n- `limit` — 1–5000 (по умолчанию 1000); выборка детерминирована (current_priority desc nulls last, id asc).\n\nОбъекты без GPS (geolocation_status=UNAVAILABLE) в слой не попадают — показывайте их в списочном представлении `/assets`. См. docs/api/geospatial.md, docs/api/workflows.md.",
         "operationId": "map_assets",
         "security": [
           {
@@ -4416,7 +4416,7 @@
           "Geospatial & Maps"
         ],
         "summary": "Слой дефектов (GeoJSON FeatureCollection)",
-        "description": "Слой дефектов для карты: точка актива с атрибутами дефекта.\n\n- **200** — FeatureCollection; геометрия Point `[lon, lat]`. Properties: id, asset_id, asset_type, defect_type, severity, status, current_priority, first/last_detected_at.\n- `bbox` — `min_lon,min_lat,max_lon,max_lat`; невалидный формат → 422.\n- `status` — OPEN/CONFIRMED/IN_PROGRESS/RESOLVED/REJECTED.\n- `severity_min` — нижняя граница тяжести 1–5.\n- `limit` — 1–5000 (по умолчанию 1000).\n\nДефекты наследуют координаты актива; активы без GPS не отображаются. См. docs/api/geospatial.md.",
+        "description": "Слой дефектов для карты: точка актива с атрибутами дефекта.\n\n- **200** — FeatureCollection; геометрия Point `[lon, lat]`. Properties: id, asset_id, asset_type, defect_type, severity, status, current_priority, first/last_detected_at.\n- `bbox` — `min_lon,min_lat,max_lon,max_lat`; невалидный формат → 422.\n- `status` — OPEN/CONFIRMED/IN_PROGRESS/RESOLVED/REJECTED.\n- `severity_min` — нижняя граница тяжести 1–5.\n- `limit` — 1–5000 (по умолчанию 1000); выборка детерминирована (severity desc, id asc).\n\nДефекты наследуют координаты актива; активы без GPS не отображаются. См. docs/api/geospatial.md.",
         "operationId": "map_defects",
         "security": [
           {
@@ -4557,7 +4557,7 @@
           "Geospatial & Maps"
         ],
         "summary": "Слой наблюдений (GeoJSON FeatureCollection)",
-        "description": "Слой ML-детекций для карты (например, результат конкретного job).\n\n- **200** — FeatureCollection; геометрия Point `[lon, lat]`. Properties: id, asset_id, object_type, condition_class, detector_confidence, review_status, dedup_result, observed_at, processing_job_id.\n- `job_id` — UUID job (фильтр по processing_job_id).\n- `date_from`/`date_to` фильтруют по **observed_at** (включительно); date_from > date_to → 422.\n- `bbox` — `min_lon,min_lat,max_lon,max_lat`; `limit` — 1–5000.\n\nНаблюдения без геопривязки в слой не попадают. См. docs/api/geospatial.md, docs/api/upload-and-processing.md.",
+        "description": "Слой ML-детекций для карты (например, результат конкретного job).\n\n- **200** — FeatureCollection; геометрия Point `[lon, lat]`. Properties: id, asset_id, object_type, condition_class, detector_confidence, review_status, dedup_result, observed_at, processing_job_id.\n- `job_id` — UUID job (фильтр по processing_job_id).\n- `date_from`/`date_to` фильтруют по **observed_at** (включительно); date_from > date_to → 422.\n- `bbox` — `min_lon,min_lat,max_lon,max_lat`; `limit` — 1–5000 (выборка детерминирована: observed_at desc, id asc).\n\nНаблюдения без геопривязки в слой не попадают. См. docs/api/geospatial.md, docs/api/upload-and-processing.md.",
         "operationId": "map_observations",
         "security": [
           {
@@ -4717,7 +4717,7 @@
           "Geospatial & Maps"
         ],
         "summary": "Слой треков маршрутов (GeoJSON FeatureCollection)",
-        "description": "Слой треков объездов для карты: геометрия LineString из PostGIS.\n\n- **200** — FeatureCollection; координаты трека — упорядоченные пары `[longitude, latitude]`. Properties: id, name, vehicle_id, started_at/finished_at, total_distance_m (метры, ST_Length).\n- `limit` — 1–1000 (по умолчанию 100).\n\nМаршруты без трека возвращаются с geometry=null. Используется вместе со слоем наблюдений для визуализации покрытия объезда. См. docs/api/geospatial.md.",
+        "description": "Слой треков объездов для карты: геометрия LineString из PostGIS.\n\n- **200** — FeatureCollection; координаты трека — упорядоченные пары `[longitude, latitude]`. Properties: id, name, vehicle_id, started_at/finished_at, total_distance_m (метры, ST_Length).\n- `bbox` — `min_lon,min_lat,max_lon,max_lat` (пересечение трека с bbox); невалидный формат → 422.\n- `date_from`/`date_to` фильтруют по **started_at** (включительно); date_from > date_to → 422.\n- `limit` — 1–1000 (по умолчанию 100); выборка детерминирована (started_at desc, id asc).\n\nМаршруты без трека в слой не попадают. Используется вместе со слоем наблюдений для визуализации покрытия объезда. См. docs/api/geospatial.md.",
         "operationId": "map_routes",
         "security": [
           {
@@ -4725,6 +4725,62 @@
           }
         ],
         "parameters": [
+          {
+            "name": "bbox",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Географический фильтр bbox: `min_lon,min_lat,max_lon,max_lat` (WGS84, порядок координат lon/lat). Пример: 37.55,55.70,37.70,55.80",
+              "title": "Bbox"
+            },
+            "description": "Географический фильтр bbox: `min_lon,min_lat,max_lon,max_lat` (WGS84, порядок координат lon/lat). Пример: 37.55,55.70,37.70,55.80"
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Нижняя граница started_at (ISO 8601, включительно)",
+              "title": "Date From"
+            },
+            "description": "Нижняя граница started_at (ISO 8601, включительно)"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Верхняя граница started_at (ISO 8601, включительно)",
+              "title": "Date To"
+            },
+            "description": "Верхняя граница started_at (ISO 8601, включительно)"
+          },
           {
             "name": "limit",
             "in": "query",

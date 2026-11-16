@@ -27,6 +27,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           maplibre: ['maplibre-gl'],
+          deck: ['@deck.gl/maplibre', '@deck.gl/core', '@deck.gl/layers', '@deck.gl/aggregation-layers'],
           motion: ['gsap', 'gsap/ScrollTrigger'],
           vendor: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query'],
         },

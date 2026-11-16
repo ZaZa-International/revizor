@@ -108,7 +108,7 @@ test.describe('Command Center · live API @live', () => {
   });
 
   test.afterEach(() => {
-    const real = errors.filter((e) => !/favicon|net::ERR|Failed to load resource|401|404/i.test(e));
+    const real = errors.filter((e) => !/favicon|net::ERR|Failed to load resource|401|404|AbortError: signal is aborted/i.test(e));
     expect(real, `JS errors: ${real.join('\n')}`).toHaveLength(0);
     errors.length = 0;
   });

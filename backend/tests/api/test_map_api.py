@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
+from app.domain.enums import DefectStatus
+from app.infrastructure.database.models.asset import Asset
+from app.infrastructure.database.models.defect import Defect
 from app.infrastructure.database.models.route import Route
 from geoalchemy2 import WKTElement
 
@@ -117,3 +120,130 @@ async def test_map_routes_linestring(client, admin_headers, database):
     first_lon, first_lat = geometry["coordinates"][0]
     assert first_lon == pytest.approx(37.6173)
     assert first_lat == pytest.approx(55.7558)
+
+
+async def _seed_route(
+    database,
+    *,
+    name: str,
+    lon: float,
+    lat: float,
+    started_at: datetime | None = None,
+) -> uuid.UUID:
+    route_id = uuid.uuid4()
+    async with database.session() as session:
+        session.add(
+            Route(
+                id=route_id,
+                name=name,
+                vehicle_id="veh-1",
+                started_at=started_at,
+                track_geometry=WKTElement(
+                    f"LINESTRING({lon} {lat}, {lon + 0.002} {lat + 0.001})",
+                    srid=4326,
+                ),
+                total_distance_m=250.0,
+                metadata_={},
+            )
+        )
+        await session.commit()
+    return route_id
+
+
+async def test_map_assets_deterministic_priority_order(client, admin_headers, database):
+    low_id = await seed_asset(database, lon=37.61, lat=55.75, display_name="low")
+    high_id = await seed_asset(database, lon=37.62, lat=55.76, display_name="high")
+    null_id = await seed_asset(database, lon=37.63, lat=55.77, display_name="null")
+    async with database.session() as session:
+        for asset_id, priority in ((low_id, 10.0), (high_id, 90.0), (null_id, None)):
+            asset = await session.get(Asset, asset_id)
+            asset.current_priority = priority
+        await session.commit()
+    response = await client.get("/api/v1/map/assets", headers=admin_headers, params={"limit": 2})
+    assert response.status_code == 200
+    features = _assert_feature_collection(response.json())
+    assert [f["properties"]["id"] for f in features] == [str(high_id), str(low_id)]
+
+
+async def test_map_defects_deterministic_severity_order(client, admin_headers, database):
+    asset_id = await seed_asset(database, lon=37.6173, lat=55.7558)
+    now = datetime.now(UTC)
+    ids: dict[int, uuid.UUID] = {}
+    async with database.session() as session:
+        for severity in (2, 5, 4):
+            defect = Defect(
+                asset_id=asset_id,
+                defect_type="damaged_cover",
+                severity=severity,
+                status=DefectStatus.OPEN,
+                first_detected_at=now,
+                last_detected_at=now,
+            )
+            session.add(defect)
+            await session.flush()
+            ids[severity] = defect.id
+        await session.commit()
+    response = await client.get("/api/v1/map/defects", headers=admin_headers, params={"limit": 2})
+    assert response.status_code == 200
+    features = _assert_feature_collection(response.json())
+    assert [f["properties"]["id"] for f in features] == [str(ids[5]), str(ids[4])]
+
+
+async def test_map_routes_bbox_excludes_outside(client, admin_headers, database):
+    inside_id = await _seed_route(database, name="inside", lon=37.6173, lat=55.7558)
+    await _seed_route(database, name="outside", lon=37.95, lat=55.95)
+    response = await client.get(
+        "/api/v1/map/routes",
+        headers=admin_headers,
+        params={"bbox": "37.6,55.7,37.7,55.8"},
+    )
+    assert response.status_code == 200
+    features = _assert_feature_collection(response.json())
+    assert len(features) == 1
+    assert features[0]["properties"]["id"] == str(inside_id)
+
+
+async def test_map_routes_date_range_and_order(client, admin_headers, database):
+    old_id = await _seed_route(
+        database,
+        name="old",
+        lon=37.61,
+        lat=55.75,
+        started_at=datetime(2026, 11, 1, 10, 0, tzinfo=UTC),
+    )
+    new_id = await _seed_route(
+        database,
+        name="new",
+        lon=37.62,
+        lat=55.76,
+        started_at=datetime(2026, 11, 10, 10, 0, tzinfo=UTC),
+    )
+    response = await client.get("/api/v1/map/routes", headers=admin_headers)
+    assert response.status_code == 200
+    features = _assert_feature_collection(response.json())
+    assert [f["properties"]["id"] for f in features] == [str(new_id), str(old_id)]
+
+    response = await client.get(
+        "/api/v1/map/routes",
+        headers=admin_headers,
+        params={"date_from": "2026-11-05T00:00:00Z", "date_to": "2026-11-15T00:00:00Z"},
+    )
+    assert response.status_code == 200
+    features = _assert_feature_collection(response.json())
+    assert [f["properties"]["id"] for f in features] == [str(new_id)]
+
+
+async def test_map_routes_inverted_dates_422(client, admin_headers, database):
+    response = await client.get(
+        "/api/v1/map/routes",
+        headers=admin_headers,
+        params={"date_from": "2026-11-15T00:00:00Z", "date_to": "2026-11-01T00:00:00Z"},
+    )
+    assert response.status_code == 422
+
+
+async def test_map_routes_invalid_bbox_422(client, admin_headers, database):
+    response = await client.get(
+        "/api/v1/map/routes", headers=admin_headers, params={"bbox": "not-a-bbox"}
+    )
+    assert response.status_code == 422

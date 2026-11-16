@@ -38,3 +38,6 @@ docker-compose.override.yml
 # Артефакты браузерных проверок
 .playwright-mcp/
 *.png
+
+# Deliverable-скриншоты геопространственной подсистемы (отслеживаются)
+!docs/assets/geospatial/*.png

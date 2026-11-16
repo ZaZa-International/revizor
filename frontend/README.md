@@ -44,14 +44,20 @@ src/
 ├── data/         source.tsx (live|demo контекст), hooks.ts (TanStack Query hooks,
 │                 ключи включают mode → кэш live/demo не смешивается)
 ├── demo/         data.ts (детерминированный синтетический датасет), provider.ts
-│                 (те же формы ответов + мутации + симуляция job), frames.ts (SVG-кадры)
-├── components/   ui.tsx, icons.tsx, charts.tsx, map/ (NetworkMap→MapView|SchematicMap)
+│                 (те же формы ответов + мутации + симуляция job), frames.ts (SVG-кадры),
+│                 walkthrough.tsx (10-шаговый DEMO-сценарий карты)
+├── geo/          types/validate/adapter/palette/coverage/state/deck — геоданные-адаптер,
+│                 единое состояние карты (URL), lazy deck.gl-агрегация
+├── components/   ui.tsx, icons.tsx, charts.tsx, map/ (NetworkMap→MapView|SchematicMap,
+│                 DeckOverlay, inspection-панели)
 ├── showcase/     ShowcasePage + 7 сцен, NetworkSvg, motion.ts, useShowcaseData.ts
 ├── app/          AppShell + 15 страниц (Overview…Exports, паспорта, детали)
 ├── lib/          labels.ts (RU-справочники), format.ts, bbox.ts, permissions.ts
 ├── styles/       tokens / base / components / app / showcase
-└── tests/        vitest unit
-e2e/              showcase / app-demo / app-live (@live) / responsive / robustness
+└── tests/        vitest unit (lib/demo/geo)
+e2e/              showcase / app-demo / app-live (@live) / responsive / robustness /
+                  map-geospatial / map-failures
+public/styles/    revizor-dark.json (self-hosted vector style, scripts/build-map-style.mjs)
 ```
 
 ### Режимы данных
@@ -67,11 +73,21 @@ e2e/              showcase / app-demo / app-live (@live) / responsive / robustne
 
 ### Карта
 
-MapLibre GL: тёмный raster basemap (Esri World Dark Gray, без API-ключа, attribution), GeoJSON-слои
-assets (кластеризация) / defects (кольца) / observations / routes, selection,
-popup, fitBounds. Fallback при отказе WebGL или >8 ошибках тайлов →
-интерактивная SVG-схема с координатной сеткой (без выдуманной географии),
-pan/zoom, keyboard-доступные точки. Карта монтируется только рядом с viewport.
+MapLibre GL: **2D/3D режимы одной карты**. Векторный basemap OpenFreeMap
+(self-hosted графитовый стиль `public/styles/revizor-dark.json`, генератор
+`scripts/build-map-style.mjs`, ODbL attribution), 3D-здания из реальных высот OSM
+(`render_height`, fill-extrusion), камера pitch/bearing/compass. GeoJSON-слои
+assets (кластеризация) / defects (кольца S4+) / observations / routes / coverage
+(сетка `/analytics/coverage`), тепловая карта и гексагональная агрегация дефектов
+(deck.gl, lazy, interleaved — один WebGL-контекст). Единое состояние в URL
+(`src/geo/state.ts`): режим/камера/слои/фильтры/выбор/период переживают reload и
+deep-link; 2D↔3D не сбрасывает выбор. Геоданные-адаптер (`src/geo/`) валидирует
+RFC 7946 `[lon,lat]`, отделяет domain/presentation, рисует кольца GPS-неопределённости.
+Inspection-панели: паспорт актива (наблюдения/дефекты/история/сравнение объездов),
+наблюдение, дефект, маршрут. DEMO-сценарий `Infrastructure Inspection Walkthrough`
+(10 шагов). Viewport-loading по bbox. Fallback: Esri raster при отказе векторных
+тайлов, интерактивная SVG-схема при отказе WebGL (без выдуманной географии),
+pan/zoom, keyboard-доступные точки. Подробности: `docs/geospatial-architecture.md`.
 
 ## API integration map
 
@@ -108,9 +124,11 @@ pan/zoom, keyboard-доступные точки. Карта монтирует�
 
 ## Тесты и QA
 
-- unit: 28 (детерминизм demo, фильтры/пагинация, review-логика, оптимистичная
-  блокировка, форматтеры, bbox, семантика статусов).
-- E2E: showcase (6), demo (10), live @live (7), responsive (10), robustness (9).
+- unit: 51 (геоадаптер/валидация координат/состояние карты/покрытие — 23;
+  детерминизм demo, фильтры/пагинация, review-логика, оптимистичная блокировка,
+  форматтеры, bbox, семантика статусов — 28).
+- E2E: showcase (6), demo (10), live @live (7), responsive (10), robustness (9),
+  map-geospatial (9), map-failures (5) — всего 56.
 - Программный визуальный QA: контрасты токенов, типографика, композиция hero,
   scrub-прогресс, WebGL/attribution, focus states, перекрытия на мобильных.
 - Performance (production preview): LCP 296–1124ms, CLS ≤0.023.

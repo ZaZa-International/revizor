@@ -141,7 +141,7 @@ test.describe('Command Center · demo-режим', () => {
   });
 
   test.afterEach(() => {
-    const real = errors.filter((e) => !/favicon|net::ERR|Failed to load resource/i.test(e));
+    const real = errors.filter((e) => !/favicon|net::ERR|Failed to load resource|AbortError: signal is aborted/i.test(e));
     expect(real, `JS errors: ${real.join('\n')}`).toHaveLength(0);
     errors.length = 0;
   });

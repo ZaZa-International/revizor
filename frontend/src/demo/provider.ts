@@ -55,6 +55,23 @@ function inBbox(lon: number | null | undefined, lat: number | null | undefined, 
   return lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat;
 }
 
+function matchDateIso(iso: string | null | undefined, from?: string, to?: string): boolean {
+  if (!iso) return !from && !to;
+  const t = new Date(iso).getTime();
+  if (from && t < new Date(from).getTime()) return false;
+  if (to) {
+    const toT = new Date(to.length <= 10 ? `${to}T23:59:59Z` : to).getTime();
+    if (t > toT) return false;
+  }
+  return true;
+}
+
+function lineInBbox(track: GeoJSON.LineString | null | undefined, bbox?: string): boolean {
+  if (!bbox) return true;
+  if (!track || track.type !== 'LineString') return false;
+  return track.coordinates.some((c) => inBbox(c[0], c[1], bbox));
+}
+
 function sortItems<T>(items: T[], sortBy?: string, order?: string): T[] {
   if (!sortBy) return items;
   const dir = order === 'asc' ? 1 : -1;
@@ -522,6 +539,7 @@ export const demoProvider = {
     if (p.asset_type) items = items.filter((a) => a.asset_type === p.asset_type);
     if (p.priority_band) items = items.filter((a) => a.priority_band === p.priority_band);
     if (p.bbox) items = items.filter((a) => inBbox(a.longitude, a.latitude, String(p.bbox)));
+    items = sortItems(items, 'current_priority', 'desc');
     return {
       type: 'FeatureCollection',
       features: items.slice(0, Number(p.limit) || 2000).map((a) => ({
@@ -552,6 +570,7 @@ export const demoProvider = {
       .filter((x) => !p.status || x.d.status === p.status)
       .filter((x) => !p.severity_min || (x.d.severity ?? 0) >= Number(p.severity_min))
       .filter((x) => inBbox(x.a!.longitude, x.a!.latitude, p.bbox as string));
+    items.sort((x, y) => (y.d.severity ?? 0) - (x.d.severity ?? 0));
     return {
       type: 'FeatureCollection',
       features: items.map(({ d, a }) => ({
@@ -577,9 +596,11 @@ export const demoProvider = {
     let items = demoData.observations.filter((o) => o.longitude != null && o.latitude != null);
     if (p.job_id) items = items.filter((o) => o.processing_job_id === p.job_id);
     if (p.bbox) items = items.filter((o) => inBbox(o.longitude, o.latitude, String(p.bbox)));
+    items = items.filter((o) => matchDateIso(o.observed_at, p.date_from as string, p.date_to as string));
+    items = sortItems(items, 'observed_at', 'desc');
     return {
       type: 'FeatureCollection',
-      features: items.slice(0, 2000).map((o) => ({
+      features: items.slice(0, Number(p.limit) || 2000).map((o) => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [o.longitude!, o.latitude!] },
         properties: {
@@ -597,17 +618,19 @@ export const demoProvider = {
     } as ObservationMapCollection;
   },
 
-  async mapRoutes(): Promise<RouteMapCollection> {
+  async mapRoutes(p: Params = {}): Promise<RouteMapCollection> {
     await delay();
+    let items = demoData.routes.filter((r) => r.track_geojson);
+    if (p.bbox) items = items.filter((r) => lineInBbox(r.track_geojson as GeoJSON.LineString | null, String(p.bbox)));
+    items = items.filter((r) => matchDateIso(r.started_at, p.date_from as string, p.date_to as string));
+    items = sortItems(items, 'started_at', 'desc');
     return {
       type: 'FeatureCollection',
-      features: demoData.routes
-        .filter((r) => r.track_geojson)
-        .map((r) => ({
-          type: 'Feature',
-          geometry: r.track_geojson!,
-          properties: { id: r.id, name: r.name, vehicle_id: r.vehicle_id, started_at: r.started_at, finished_at: r.finished_at, total_distance_m: r.total_distance_m },
-        })),
+      features: items.slice(0, Number(p.limit) || 100).map((r) => ({
+        type: 'Feature',
+        geometry: r.track_geojson!,
+        properties: { id: r.id, name: r.name, vehicle_id: r.vehicle_id, started_at: r.started_at, finished_at: r.finished_at, total_distance_m: r.total_distance_m },
+      })),
     } as RouteMapCollection;
   },
 

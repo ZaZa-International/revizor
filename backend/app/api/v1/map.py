@@ -41,7 +41,8 @@ router = APIRouter(prefix="/map", tags=["Geospatial & Maps"], route_class=Docume
         "- `bbox` — `min_lon,min_lat,max_lon,max_lat` (порядок lon/lat); "
         "невалидный формат → 422.\n"
         "- `priority_band` — типизированный enum (невалидное значение → 422).\n"
-        "- `limit` — 1–5000 (по умолчанию 1000); выборка детерминирована.\n\n"
+        "- `limit` — 1–5000 (по умолчанию 1000); выборка детерминирована "
+        "(current_priority desc nulls last, id asc).\n\n"
         "Объекты без GPS (geolocation_status=UNAVAILABLE) в слой не попадают — "
         "показывайте их в списочном представлении `/assets`. "
         "См. docs/api/geospatial.md, docs/api/workflows.md."
@@ -82,7 +83,8 @@ async def map_assets(
         "- `bbox` — `min_lon,min_lat,max_lon,max_lat`; невалидный формат → 422.\n"
         "- `status` — OPEN/CONFIRMED/IN_PROGRESS/RESOLVED/REJECTED.\n"
         "- `severity_min` — нижняя граница тяжести 1–5.\n"
-        "- `limit` — 1–5000 (по умолчанию 1000).\n\n"
+        "- `limit` — 1–5000 (по умолчанию 1000); выборка детерминирована "
+        "(severity desc, id asc).\n\n"
         "Дефекты наследуют координаты актива; активы без GPS не отображаются. "
         "См. docs/api/geospatial.md."
     ),
@@ -119,7 +121,8 @@ async def map_defects(
         "- `job_id` — UUID job (фильтр по processing_job_id).\n"
         "- `date_from`/`date_to` фильтруют по **observed_at** (включительно); "
         "date_from > date_to → 422.\n"
-        "- `bbox` — `min_lon,min_lat,max_lon,max_lat`; `limit` — 1–5000.\n\n"
+        "- `bbox` — `min_lon,min_lat,max_lon,max_lat`; `limit` — 1–5000 "
+        "(выборка детерминирована: observed_at desc, id asc).\n\n"
         "Наблюдения без геопривязки в слой не попадают. "
         "См. docs/api/geospatial.md, docs/api/upload-and-processing.md."
     ),
@@ -160,8 +163,13 @@ async def map_observations(
         "- **200** — FeatureCollection; координаты трека — упорядоченные пары "
         "`[longitude, latitude]`. Properties: id, name, vehicle_id, "
         "started_at/finished_at, total_distance_m (метры, ST_Length).\n"
-        "- `limit` — 1–1000 (по умолчанию 100).\n\n"
-        "Маршруты без трека возвращаются с geometry=null. Используется вместе "
+        "- `bbox` — `min_lon,min_lat,max_lon,max_lat` (пересечение трека с bbox); "
+        "невалидный формат → 422.\n"
+        "- `date_from`/`date_to` фильтруют по **started_at** (включительно); "
+        "date_from > date_to → 422.\n"
+        "- `limit` — 1–1000 (по умолчанию 100); выборка детерминирована "
+        "(started_at desc, id asc).\n\n"
+        "Маршруты без трека в слой не попадают. Используется вместе "
         "со слоем наблюдений для визуализации покрытия объезда. "
         "См. docs/api/geospatial.md."
     ),
@@ -169,8 +177,18 @@ async def map_observations(
 async def map_routes(
     session: SessionDep,
     user: CurrentUser,
+    bbox: BboxQuery = None,
+    date_from: Annotated[
+        datetime | None, Query(description="Нижняя граница started_at (ISO 8601, включительно)")
+    ] = None,
+    date_to: Annotated[
+        datetime | None, Query(description="Верхняя граница started_at (ISO 8601, включительно)")
+    ] = None,
     limit: Annotated[
         int, Query(ge=1, le=1000, description="Максимум маршрутов (1–1000, по умолчанию 100)")
     ] = 100,
 ) -> dict:
-    return await GeospatialService(session).map_routes(limit=limit)
+    validate_date_range(date_from, date_to)
+    return await GeospatialService(session).map_routes(
+        bbox=parse_bbox(bbox), date_from=date_from, date_to=date_to, limit=limit
+    )

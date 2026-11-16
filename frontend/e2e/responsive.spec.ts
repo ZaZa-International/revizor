@@ -89,5 +89,6 @@ test.describe('Mobile: навигация и действия', () => {
     expect(sideBox).not.toBeNull();
     expect(canvasBox!.y).toBeLessThan(sideBox!.y);
     await page.screenshot({ path: 'artifacts/qa/mobile-390-map.png', fullPage: true });
+    await page.screenshot({ path: '../docs/assets/geospatial/mobile-390-map.png' });
   });
 });

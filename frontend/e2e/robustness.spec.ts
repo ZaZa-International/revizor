@@ -27,11 +27,12 @@ test.describe('Надёжность и fallback', () => {
     await page.screenshot({ path: 'artifacts/qa/30-svg-fallback.png' });
   });
 
-  test('отказ тайлов basemap → schematic fallback', async ({ page }) => {
+  test('отказ тайлов basemap → raster fallback → schematic', async ({ page }) => {
+    await page.route('**/tiles.openfreemap.org/**', (route) => route.abort());
     await page.route('**/server.arcgisonline.com/**', (route) => route.abort());
     await enterDemo(page);
     await page.goto('/app/map');
-    await page.waitForTimeout(6000);
+    await page.waitForTimeout(8000);
     const canvas = await page.locator('.map-canvas canvas').count();
     const svg = await page.locator('.map-canvas svg[role="application"]').count();
     expect(canvas + svg).toBeGreaterThan(0);
@@ -128,7 +129,7 @@ test.describe('Надёжность и fallback', () => {
     await page.goto('/app/map');
     await page.waitForTimeout(4500);
     const tiles = await page.evaluate(() =>
-      performance.getEntriesByType('resource').filter((r) => r.name.includes('server.arcgisonline.com')).length,
+      performance.getEntriesByType('resource').filter((r) => r.name.includes('tiles.openfreemap.org')).length,
     );
     const canvas = await page.locator('.map-canvas canvas').count();
     if (canvas > 0) expect(tiles).toBeGreaterThan(0);

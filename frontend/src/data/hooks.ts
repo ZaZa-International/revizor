@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { api, networkError, newIdempotencyKey, unwrap } from '../api/client';
 import type {
   AnalyticsOverview,
@@ -67,13 +67,14 @@ export function useDefectsAnalytics() {
   });
 }
 
-export function useCoverage() {
+export function useCoverage(options?: Partial<UseQueryOptions<CoverageResponse>>) {
   const { mode } = useDataSource();
   return useQuery({
     queryKey: ['analytics-coverage', mode],
     queryFn: () =>
       mode === 'demo' ? demoProvider.analyticsCoverage() : live(() => unwrap(api.GET('/api/v1/analytics/coverage'))),
     staleTime: 60_000,
+    ...options,
   });
 }
 
@@ -481,6 +482,7 @@ export function useMapAssets(params: Q = {}, options?: Partial<UseQueryOptions<A
         ? demoProvider.mapAssets(q)
         : live(() => unwrap(api.GET('/api/v1/map/assets', { params: { query: q as never } }))),
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -495,11 +497,12 @@ export function useMapDefects(params: Q = {}, options?: Partial<UseQueryOptions<
         ? demoProvider.mapDefects(q)
         : live(() => unwrap(api.GET('/api/v1/map/defects', { params: { query: q as never } }))),
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
 
-export function useMapObservations(params: Q = {}) {
+export function useMapObservations(params: Q = {}, options?: Partial<UseQueryOptions<ObservationMapCollection>>) {
   const { mode } = useDataSource();
   const q = clean(params);
   return useQuery({
@@ -509,18 +512,22 @@ export function useMapObservations(params: Q = {}) {
         ? demoProvider.mapObservations(q)
         : live(() => unwrap(api.GET('/api/v1/map/observations', { params: { query: q as never } }))),
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
+    ...options,
   });
 }
 
-export function useMapRoutes(options?: Partial<UseQueryOptions<RouteMapCollection>>) {
+export function useMapRoutes(params: Q = {}, options?: Partial<UseQueryOptions<RouteMapCollection>>) {
   const { mode } = useDataSource();
+  const q = clean(params);
   return useQuery({
-    queryKey: ['map-routes', mode],
+    queryKey: ['map-routes', mode, q],
     queryFn: () =>
       mode === 'demo'
-        ? demoProvider.mapRoutes()
-        : live(() => unwrap(api.GET('/api/v1/map/routes'))),
+        ? demoProvider.mapRoutes(q)
+        : live(() => unwrap(api.GET('/api/v1/map/routes', { params: { query: q as never } }))),
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }

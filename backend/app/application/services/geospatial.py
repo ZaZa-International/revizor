@@ -61,7 +61,9 @@ class GeospatialService:
             stmt = stmt.where(Asset.asset_type == asset_type)
         if priority_band is not None:
             stmt = stmt.where(Asset.priority_band == priority_band)
-        stmt = stmt.limit(min(limit, MAP_MAX_FEATURES))
+        stmt = stmt.order_by(Asset.current_priority.desc().nulls_last(), Asset.id.asc()).limit(
+            min(limit, MAP_MAX_FEATURES)
+        )
         rows = (await self._session.execute(stmt)).scalars().all()
         features = [
             _feature(
@@ -105,7 +107,9 @@ class GeospatialService:
             stmt = stmt.where(Defect.status == status)
         if severity_min is not None:
             stmt = stmt.where(Defect.severity >= severity_min)
-        stmt = stmt.limit(min(limit, MAP_MAX_FEATURES))
+        stmt = stmt.order_by(Defect.severity.desc(), Defect.id.asc()).limit(
+            min(limit, MAP_MAX_FEATURES)
+        )
         rows = (await self._session.execute(stmt)).all()
         features = [
             _feature(
@@ -144,7 +148,9 @@ class GeospatialService:
             stmt = stmt.where(Observation.observed_at >= date_from)
         if date_to is not None:
             stmt = stmt.where(Observation.observed_at <= date_to)
-        stmt = stmt.order_by(Observation.observed_at.desc()).limit(min(limit, MAP_MAX_FEATURES))
+        stmt = stmt.order_by(Observation.observed_at.desc(), Observation.id.asc()).limit(
+            min(limit, MAP_MAX_FEATURES)
+        )
         rows = (await self._session.execute(stmt)).scalars().all()
         features = [
             _feature(
@@ -165,11 +171,23 @@ class GeospatialService:
         ]
         return _collection(features)
 
-    async def map_routes(self, *, limit: int = MAP_MAX_FEATURES) -> dict:
-        stmt = (
-            select(Route)
-            .where(Route.track_geometry.is_not(None))
-            .limit(min(limit, MAP_MAX_FEATURES))
+    async def map_routes(
+        self,
+        *,
+        bbox: BoundingBox | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        limit: int = MAP_MAX_FEATURES,
+    ) -> dict:
+        stmt = select(Route).where(Route.track_geometry.is_not(None))
+        if bbox is not None:
+            stmt = stmt.where(func.ST_Intersects(Route.track_geometry, bbox_element(bbox)))
+        if date_from is not None:
+            stmt = stmt.where(Route.started_at >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(Route.started_at <= date_to)
+        stmt = stmt.order_by(Route.started_at.desc().nulls_last(), Route.id.asc()).limit(
+            min(limit, MAP_MAX_FEATURES)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         features = [
