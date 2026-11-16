@@ -1,22 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import gsap from 'gsap';
-import NetworkSvg from '../NetworkSvg';
 import { prefersReducedMotion } from '../motion';
 import { IconArrowRight, IconChevronDown } from '../../components/icons';
 
 export default function Hero({ live }: { live: boolean }) {
   const rootRef = useRef<HTMLElement>(null);
   const mediaRef = useRef<HTMLDivElement>(null);
-  const [netProgress, setNetProgress] = useState(prefersReducedMotion() ? 1 : 0);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    if (prefersReducedMotion()) {
-      setNetProgress(1);
-      return;
-    }
+    if (prefersReducedMotion()) return;
     const ctx = gsap.context(() => {
       const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
       tl.from('.hero-eyebrow', { y: 18, opacity: 0, duration: 0.55 })
@@ -24,14 +19,6 @@ export default function Hero({ live }: { live: boolean }) {
         .from('.hero-sub', { y: 20, opacity: 0, duration: 0.55 }, '-=0.4')
         .from('.hero-cta > *', { y: 16, opacity: 0, duration: 0.45, stagger: 0.08 }, '-=0.35')
         .from('.hero-coords', { opacity: 0, duration: 0.6 }, '-=0.3');
-      const net = { v: 0 };
-      gsap.to(net, {
-        v: 1,
-        duration: 2.6,
-        delay: 0.5,
-        ease: 'power2.inOut',
-        onUpdate: () => setNetProgress(net.v),
-      });
     }, root);
 
     let raf = 0;
@@ -67,9 +54,6 @@ export default function Hero({ live }: { live: boolean }) {
         />
       </div>
       <div className="hero-shade" />
-      <div className="hero-net">
-        <NetworkSvg progress={netProgress} />
-      </div>
 
       <div className="hero-content">
         <div className="hero-eyebrow">
