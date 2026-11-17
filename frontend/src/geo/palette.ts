@@ -11,6 +11,8 @@ export const BAND_COLORS: Record<string, string> = {
 export const GEO_COLORS = {
   accent: '#75D7CC',
   accentDim: '#3D8A81',
+  accentHeat: 'rgba(117,215,204,0.55)',
+  accentSoft: 'rgba(117,215,204,0.14)',
   warn: '#F0A45C',
   crit: '#E66C61',
   ok: '#9DBFA8',

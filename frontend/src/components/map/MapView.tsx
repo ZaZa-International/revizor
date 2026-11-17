@@ -18,6 +18,7 @@ import {
 import { GEO_COLORS } from '../../geo/palette';
 import { serializeCamera } from '../../geo/state';
 import type { MapCamera, MapMode } from '../../geo/types';
+import { label } from '../../lib/labels';
 
 export { BAND_COLORS } from '../../geo/palette';
 
@@ -413,7 +414,7 @@ export default function MapView({
           'interpolate', ['linear'], ['heatmap-density'],
           0, 'rgba(9,19,24,0)',
           0.2, 'rgba(61,138,129,0.35)',
-          0.5, 'rgba(117,215,204,0.55)',
+          0.5, GEO_COLORS.accentHeat,
           0.8, 'rgba(240,164,92,0.7)',
           1, 'rgba(230,108,97,0.85)',
         ],
@@ -504,7 +505,7 @@ export default function MapView({
       source: 'selection',
       paint: {
         'circle-radius': 15,
-        'circle-color': 'rgba(117,215,204,0.14)',
+        'circle-color': GEO_COLORS.accentSoft,
         'circle-stroke-width': 2,
         'circle-stroke-color': GEO_COLORS.ink,
       },
@@ -527,6 +528,25 @@ export default function MapView({
       const f = e.features?.[0];
       if (!f) return;
       const name = String(f.properties?._label ?? f.properties?.display_name ?? 'Объект');
+      popup.setLngLat(e.lngLat).setHTML(`<span>${escapeHtml(name)}</span>`).addTo(map);
+    });
+    map.on('mousemove', 'defect-rings', (e: maplibregl.MapLayerMouseEvent) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const sev = Number(f.properties?.severity ?? 0);
+      const text = `${label.defectType(String(f.properties?.defect_type ?? ''))}${sev ? ` · S${sev}` : ''}`;
+      popup.setLngLat(e.lngLat).setHTML(`<span>${escapeHtml(text)}</span>`).addTo(map);
+    });
+    map.on('mousemove', 'obs-points', (e: maplibregl.MapLayerMouseEvent) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const text = `${label.assetType(String(f.properties?.object_type ?? ''))} · ${label.condition(String(f.properties?.condition_class ?? ''))}`;
+      popup.setLngLat(e.lngLat).setHTML(`<span>${escapeHtml(text)}</span>`).addTo(map);
+    });
+    map.on('mousemove', 'routes-line', (e: maplibregl.MapLayerMouseEvent) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const name = String(f.properties?.name ?? 'Маршрут');
       popup.setLngLat(e.lngLat).setHTML(`<span>${escapeHtml(name)}</span>`).addTo(map);
     });
 

@@ -60,7 +60,7 @@ export const IconRoute = (p: P) => (
   <svg {...base(p)}>
     <circle cx="5" cy="18" r="2.2" />
     <circle cx="19" cy="6" r="2.2" />
-    <path d="M7 18h6a4 4 0 0 0 0-8H9a3 3 0 0 1 0-6h8" strokeDasharray="0" />
+    <path d="M7 18h6a4 4 0 0 0 0-8H9a3 3 0 0 1 0-6h8" />
   </svg>
 );
 
@@ -86,6 +86,12 @@ export const IconSearch = (p: P) => (
 export const IconPlus = (p: P) => (
   <svg {...base(p)}>
     <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+export const IconMinus = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M5 12h14" />
   </svg>
 );
 
@@ -144,42 +150,11 @@ export const IconExternal = (p: P) => (
   </svg>
 );
 
-export const IconClock = (p: P) => (
-  <svg {...base(p)}>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3.5 2" />
-  </svg>
-);
-
 export const IconTarget = (p: P) => (
   <svg {...base(p)}>
     <circle cx="12" cy="12" r="8" />
     <circle cx="12" cy="12" r="3" />
     <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-  </svg>
-);
-
-export const IconLayers = (p: P) => (
-  <svg {...base(p)}>
-    <path d="m12 3 9 5-9 5-9-5zM3 13l9 5 9-5" />
-  </svg>
-);
-
-export const IconFilter = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M3 5h18l-7 8v6l-4-2v-4z" />
-  </svg>
-);
-
-export const IconRefresh = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4" />
-  </svg>
-);
-
-export const IconMenu = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M4 7h16M4 12h16M4 17h16" />
   </svg>
 );
 

@@ -12,7 +12,7 @@ export function useShowcaseData() {
 
   const liveOverview = useAnalyticsOverview({ enabled: live });
   const liveAssets = useMapAssets({ limit: 500 }, { enabled: live });
-  const liveRoutes = useMapRoutes({ enabled: live });
+  const liveRoutes = useMapRoutes({}, { enabled: live });
   const liveQueue = useObservations({ review_status: 'UNREVIEWED', page_size: 1 }, { enabled: live });
 
   const demoOverview = useQuery({ queryKey: ['showcase-demo-overview'], queryFn: () => demoProvider.analyticsOverview(), enabled: !live, staleTime: Infinity });

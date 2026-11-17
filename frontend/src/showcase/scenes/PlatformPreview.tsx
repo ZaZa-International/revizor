@@ -34,7 +34,6 @@ export default function PlatformPreview() {
         <div className="preview-card">
           <div className="preview-card-head">
             <span className="eyebrow">/app · Обзор</span>
-            <span className="dots" aria-hidden><i /><i /><i /></span>
           </div>
           <div className="preview-card-body">
             {loading || !overview ? (
@@ -76,7 +75,6 @@ export default function PlatformPreview() {
         <div className="preview-card">
           <div className="preview-card-head">
             <span className="eyebrow">/app/map · Карта</span>
-            <span className="dots" aria-hidden><i /><i /><i /></span>
           </div>
           <div className="preview-card-body">
             <div className="preview-map">
@@ -104,7 +102,6 @@ export default function PlatformPreview() {
         <div className="preview-card">
           <div className="preview-card-head">
             <span className="eyebrow">/app/reviews · Проверка</span>
-            <span className="dots" aria-hidden><i /><i /><i /></span>
           </div>
           <div className="preview-card-body">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--sp-4)' }}>

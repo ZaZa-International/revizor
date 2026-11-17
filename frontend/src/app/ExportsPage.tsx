@@ -76,6 +76,7 @@ function ExportCard({ entity, name, desc }: { entity: Entity; name: string; desc
   const [filter1, setFilter1] = useState('');
   const [filter2, setFilter2] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastExport, setLastExport] = useState<string | null>(null);
 
   const filterDefs =
@@ -96,6 +97,7 @@ function ExportCard({ entity, name, desc }: { entity: Entity; name: string; desc
 
   const run = async () => {
     setBusy(true);
+    setError(null);
     try {
       const stamp = new Date().toISOString().slice(0, 10);
       if (isDemo) {
@@ -124,7 +126,7 @@ function ExportCard({ entity, name, desc }: { entity: Entity; name: string; desc
       setLastExport(new Date().toISOString());
       toast('success', `Выгрузка ${name.toLowerCase()} готова.`);
     } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Ошибка экспорта');
+      setError(err instanceof Error ? err.message : 'Ошибка экспорта');
     } finally {
       setBusy(false);
     }
@@ -155,6 +157,7 @@ function ExportCard({ entity, name, desc }: { entity: Entity; name: string; desc
           </select>
         </Field>
         {isDemo && <p className="faint" style={{ fontSize: 'var(--text-micro)' }}>XLSX доступен только в live-режиме (формирует backend).</p>}
+        {error && <div className="login-error" role="alert">{error}</div>}
         <Button variant="primary" loading={busy} onClick={() => void run()}>
           Скачать {format.toUpperCase()}
         </Button>

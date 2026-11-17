@@ -390,10 +390,10 @@
 .pipeline-step {
   position: relative;
   display: grid;
-  grid-template-columns: 56px 1fr 200px;
+  grid-template-columns: 56px minmax(0, 1fr);
   gap: var(--sp-5);
   padding: var(--sp-6) 0;
-  align-items: center;
+  align-items: start;
 }
 
 .pipeline-num {
@@ -433,18 +433,138 @@
   max-width: 520px;
 }
 
-.pipeline-art {
-  width: 200px;
-  height: 120px;
-  border: 1px solid var(--paper-line);
-  border-radius: var(--radius-m);
-  background: var(--paper-raised);
+/* Specimen: реальный материал продукта (тёмная поверхность) на светлой сцене */
+.pipeline-specimen {
+  margin-top: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--bg);
+  color: var(--ink);
   overflow: hidden;
 }
 
-.pipeline-art svg {
+.specimen-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 8px var(--sp-4);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.specimen-body {
+  padding: var(--sp-4);
+}
+
+.spec-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+
+.spec-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-top: var(--sp-3);
+}
+
+.spec-frame {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line-soft);
+}
+
+.spec-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.spec-decisions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spec-decision {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+}
+
+.spec-decision-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-small);
+  font-weight: 500;
+}
+
+.spec-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  position: relative;
+  padding-left: 18px;
+}
+
+.spec-timeline::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--line-soft);
+}
+
+.spec-timeline-item {
+  position: relative;
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.spec-dot {
+  position: absolute;
+  left: -18px;
+  top: 5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+}
+
+.spec-dot.tone-ok {
+  background: var(--ok);
+}
+
+.spec-dot.tone-warn {
+  background: var(--warn);
+}
+
+.spec-dot.tone-crit {
+  background: var(--crit);
+}
+
+.spec-dot.tone-accent {
+  background: var(--accent);
+}
+
+.spec-dot.tone-neutral {
+  background: var(--muted);
 }
 
 /* ── Digital twin (карта) ──────────────────────────── */
@@ -557,6 +677,42 @@
   border-radius: var(--radius-m);
   overflow: hidden;
   background: var(--bg);
+  animation: scenario-in var(--dur-swap) var(--ease-out);
+}
+
+@keyframes scenario-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.scenario-dedup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: center;
+}
+
+.scenario-dedup-node {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--sp-4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+}
+
+.scenario-dedup-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--sp-2) var(--sp-3);
+  border-top: 2px dashed var(--accent-dim);
+  border-bottom: 2px dashed var(--accent-dim);
+  color: var(--accent);
 }
 
 .scenario-visual img,
@@ -615,18 +771,6 @@
   padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--line-soft);
   background: var(--raised);
-}
-
-.preview-card-head .dots {
-  display: flex;
-  gap: 5px;
-}
-
-.preview-card-head .dots i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--line);
 }
 
 .preview-card-body {
@@ -812,8 +956,8 @@
   .pipeline-step {
     grid-template-columns: 56px 1fr;
   }
-  .pipeline-art {
-    display: none;
+  .spec-split {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -855,6 +999,15 @@
   .pipeline-step {
     grid-template-columns: 44px 1fr;
     gap: var(--sp-4);
+  }
+  .scenario-dedup {
+    grid-template-columns: 1fr;
+  }
+  .scenario-dedup-link {
+    border-top: 0;
+    border-bottom: 0;
+    border-left: 2px dashed var(--accent-dim);
+    border-right: 2px dashed var(--accent-dim);
   }
   .twin-map {
     height: 340px;

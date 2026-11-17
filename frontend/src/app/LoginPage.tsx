@@ -19,10 +19,10 @@ function LoginNetworkBg() {
   return (
     <svg className="login-bg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden>
       {edges.map(([a, b], i) => (
-        <line key={i} x1={nodes[a][0]} y1={nodes[a][1]} x2={nodes[b][0]} y2={nodes[b][1]} stroke="#1C3038" strokeWidth={0.25} />
+        <line key={i} x1={nodes[a][0]} y1={nodes[a][1]} x2={nodes[b][0]} y2={nodes[b][1]} stroke="var(--raised)" strokeWidth={0.25} />
       ))}
       {nodes.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={i % 4 === 0 ? 0.8 : 0.45} fill={i % 4 === 0 ? '#3D8A81' : '#24404A'} />
+        <circle key={i} cx={x} cy={y} r={i % 4 === 0 ? 0.8 : 0.45} fill={i % 4 === 0 ? 'var(--accent-dim)' : 'var(--line)'} />
       ))}
     </svg>
   );

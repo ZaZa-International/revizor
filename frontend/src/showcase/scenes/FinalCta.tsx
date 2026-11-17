@@ -24,6 +24,7 @@ export default function FinalCta() {
           sizes="100vw"
           alt="Панорама городской застройки"
           loading="lazy"
+          style={{ background: 'url(/assets/img/skyline-lqip.webp) center/cover' }}
         />
       </div>
       <div className="final-shade" />

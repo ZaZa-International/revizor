@@ -12,6 +12,9 @@ import { fmtBytes, fmtDateTime, fmtNumber } from '../lib/format';
 import { errorMessage } from '../api/client';
 
 const ACCEPT = '.jpg,.jpeg,.png,.webp,.mp4,.avi,.mov,.webm';
+/* Лимит backend по умолчанию (MAX_UPLOAD_SIZE_BYTES, .env.example); сервер
+   дополнительно отклоняет 413 до буферизации. */
+const MAX_UPLOAD_SIZE_BYTES = 2_147_483_648;
 
 export default function JobsPage() {
   const navigate = useNavigate();
@@ -38,6 +41,10 @@ export default function JobsPage() {
     const ok = /\.(jpe?g|png|webp|mp4|avi|mov|webm)$/i.test(f.name);
     if (!ok) {
       setError('Допустимые форматы: jpeg/png/webp, mp4/avi/mov/webm.');
+      return;
+    }
+    if (f.size > MAX_UPLOAD_SIZE_BYTES) {
+      setError(`Файл больше допустимого размера: ${fmtBytes(f.size)} > ${fmtBytes(MAX_UPLOAD_SIZE_BYTES)}.`);
       return;
     }
     setFile(f);

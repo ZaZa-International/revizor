@@ -53,6 +53,7 @@ export default function InvisibleNetwork({ stats }: { stats: NetStats }) {
             sizes="100vw"
             alt="Дневная аэрофотосъёмка городской застройки"
             loading="lazy"
+            style={{ background: 'url(/assets/img/aerial-day-lqip.webp) center/cover' }}
           />
         </div>
         <div className="net-dark" style={{ opacity: reduced ? 0.84 : clamp01((p - 0.12) / 0.42) * 0.94 }} />

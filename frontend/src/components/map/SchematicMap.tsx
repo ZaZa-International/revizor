@@ -9,6 +9,7 @@ import type {
   RouteMapCollection,
 } from '../../api/types';
 import { BAND_COLORS, type LayerVisibility, type MapSelection } from './MapView';
+import { IconMinus, IconPlus, IconTarget } from '../icons';
 
 interface Props {
   assets?: AssetMapCollection | null;
@@ -147,7 +148,7 @@ export default function SchematicMap({ assets, defects, observations, routes, vi
                 key={String(f.properties?.id)}
                 points={pts}
                 fill="none"
-                stroke={sel ? '#E9EEE9' : '#3D8A81'}
+                stroke={sel ? 'var(--ink)' : 'var(--accent-dim)'}
                 strokeWidth={sel ? 3.4 : 2.4}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -169,7 +170,7 @@ export default function SchematicMap({ assets, defects, observations, routes, vi
                 cx={x}
                 cy={y}
                 r={4}
-                fill={unreviewed ? '#F0A45C' : '#75D7CC'}
+                fill={unreviewed ? 'var(--warn)' : 'var(--accent)'}
                 opacity={0.7}
                 stroke="var(--bg)"
                 strokeWidth={1}
@@ -191,7 +192,7 @@ export default function SchematicMap({ assets, defects, observations, routes, vi
                 cy={y}
                 r={12}
                 fill="none"
-                stroke={sev >= 4 ? '#E66C61' : '#F0A45C'}
+                stroke={sev >= 4 ? 'var(--crit)' : 'var(--warn)'}
                 strokeWidth={2}
                 style={{ cursor: 'pointer' }}
                 onClick={() => select('defects', f as never)}
@@ -221,7 +222,7 @@ export default function SchematicMap({ assets, defects, observations, routes, vi
                   }
                 }}
               >
-                {sel && <circle cx={x} cy={y} r={16} fill="rgba(117,215,204,0.15)" stroke="#E9EEE9" strokeWidth={2} />}
+                {sel && <circle cx={x} cy={y} r={16} fill="var(--accent)" fillOpacity={0.15} stroke="var(--ink)" strokeWidth={2} />}
                 <circle cx={x} cy={y} r={7} fill={BAND_COLORS[band] ?? BAND_COLORS.NEEDS_REVIEW} stroke="var(--bg)" strokeWidth={2} />
                 <title>{name}</title>
               </g>
@@ -232,9 +233,9 @@ export default function SchematicMap({ assets, defects, observations, routes, vi
         Схематичный режим · без базовой карты
       </div>
       <div style={{ position: 'absolute', top: 10, right: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <button className="btn btn-sm" aria-label="Приблизить" onClick={() => setZoom((z) => Math.min(8, z * 1.3))}>+</button>
-        <button className="btn btn-sm" aria-label="Отдалить" onClick={() => setZoom((z) => Math.max(0.7, z / 1.3))}>−</button>
-        <button className="btn btn-sm" aria-label="Сбросить вид" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>⌂</button>
+        <button className="btn btn-sm" aria-label="Приблизить" onClick={() => setZoom((z) => Math.min(8, z * 1.3))}><IconPlus className="icon-sm" /></button>
+        <button className="btn btn-sm" aria-label="Отдалить" onClick={() => setZoom((z) => Math.max(0.7, z / 1.3))}><IconMinus className="icon-sm" /></button>
+        <button className="btn btn-sm" aria-label="Сбросить вид" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}><IconTarget className="icon-sm" /></button>
       </div>
     </div>
   );

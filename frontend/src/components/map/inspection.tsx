@@ -73,6 +73,7 @@ export function AssetInspection({
         {a.external_id && <Badge>{a.external_id}</Badge>}
       </div>
       <Tabs
+        idBase="inspection"
         tabs={[
           { id: 'overview', label: 'Обзор' },
           { id: 'observations', label: 'Наблюдения', count: observations.data?.total },
@@ -83,7 +84,7 @@ export function AssetInspection({
         active={tab}
         onChange={(t) => onTab(t as InspectionTab)}
       />
-      <div style={{ marginTop: 12 }}>
+      <div role="tabpanel" id={`inspection-panel-${tab}`} aria-labelledby={`inspection-tab-${tab}`} style={{ marginTop: 12 }}>
         {tab === 'overview' && <AssetOverview asset={a} />}
         {tab === 'observations' && (
           <ObservationList items={obsItems} pending={observations.isPending} onNavigate={onNavigate} />

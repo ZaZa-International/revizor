@@ -115,6 +115,7 @@ export default function AssetPassportPage() {
 
       <div className="panel" style={{ marginTop: 'var(--sp-5)' }}>
         <Tabs
+          idBase="passport"
           tabs={[
             { id: 'observations', label: 'Наблюдения' },
             { id: 'defects', label: 'Дефекты' },
@@ -123,9 +124,11 @@ export default function AssetPassportPage() {
           active={tab}
           onChange={setTab}
         />
-        {tab === 'observations' && <AssetObservations id={a.id} />}
-        {tab === 'defects' && <AssetDefects id={a.id} />}
-        {tab === 'history' && <AssetHistory id={a.id} />}
+        <div role="tabpanel" id={`passport-panel-${tab}`} aria-labelledby={`passport-tab-${tab}`}>
+          {tab === 'observations' && <AssetObservations id={a.id} />}
+          {tab === 'defects' && <AssetDefects id={a.id} />}
+          {tab === 'history' && <AssetHistory id={a.id} />}
+        </div>
       </div>
 
       {editOpen && <EditAssetDialog asset={a} onClose={() => setEditOpen(false)} />}
@@ -190,7 +193,13 @@ function AssetObservations({ id }: { id: string }) {
           </thead>
           <tbody>
             {data.items.map((o) => (
-              <tr key={o.id} className="clickable" onClick={() => navigate(`/app/observations/${o.id}`)}>
+              <tr
+                key={o.id}
+                className="clickable"
+                tabIndex={0}
+                onClick={() => navigate(`/app/observations/${o.id}`)}
+                onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/app/observations/${o.id}`); }}
+              >
                 <td className="muted">{fmtDateTime(o.observed_at)}</td>
                 <td>{label.condition(o.condition_class)} <Severity value={o.severity} /></td>
                 <td>{label.condition(o.effective_condition ?? o.condition_class)}</td>
@@ -230,7 +239,13 @@ function AssetDefects({ id }: { id: string }) {
           </thead>
           <tbody>
             {data.items.map((d) => (
-              <tr key={d.id} className="clickable" onClick={() => navigate(`/app/defects/${d.id}`)}>
+              <tr
+                key={d.id}
+                className="clickable"
+                tabIndex={0}
+                onClick={() => navigate(`/app/defects/${d.id}`)}
+                onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/app/defects/${d.id}`); }}
+              >
                 <td className="cell-main">{label.defectType(d.defect_type)}</td>
                 <td><Status tone={defectStatusTone[d.status] ?? 'neutral'}>{label.defectStatus(d.status)}</Status></td>
                 <td><Severity value={d.severity} /></td>

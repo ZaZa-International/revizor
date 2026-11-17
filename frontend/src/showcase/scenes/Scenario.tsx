@@ -4,50 +4,82 @@ import { demoFrameSvg } from '../../demo/frames';
 import { Badge, Button, KeyValue, Severity, Status } from '../../components/ui';
 import { IconArrowRight, IconCheck, IconChevronLeft, IconClose } from '../../components/icons';
 import { useReveal } from '../motion';
-import { label } from '../../lib/labels';
-import { fmtDateTime, fmtPercent } from '../../lib/format';
+import { conditionTone, label } from '../../lib/labels';
+import { fmtCoord, fmtDateTime, fmtNumber, fmtPercent } from '../../lib/format';
 
-const ACC = '#75D7CC';
-const CRIT = '#E66C61';
+/* Визуалы сценария — HTML на данных демо-датасета (не захардкоженные SVG). */
 
-function DedupVisual() {
+function DedupVisual({ obs, asset }: { obs: (typeof demoData.observations)[number]; asset?: (typeof demoData.assets)[number] }) {
+  const e = (obs.dedup_explanation ?? {}) as Record<string, unknown>;
   return (
-    <svg viewBox="0 0 800 300" role="img" aria-label="Сопоставление обнаружения с существующим объектом">
-      <rect width="800" height="300" fill="#091318" />
-      <circle cx="220" cy="150" r="46" fill="none" stroke={ACC} strokeWidth="3" />
-      <circle cx="220" cy="150" r="12" fill={ACC} />
-      <text x="220" y="230" textAnchor="middle" fontFamily="monospace" fontSize="17" fill="#A0B3B5">DETECTION · 55.7561, 37.6182</text>
-      <circle cx="580" cy="150" r="46" fill="none" stroke="#E9EEE9" strokeWidth="3" />
-      <circle cx="580" cy="150" r="12" fill="#E9EEE9" />
-      <text x="580" y="230" textAnchor="middle" fontFamily="monospace" fontSize="17" fill="#A0B3B5">ASSET · колодец №4202</text>
-      <path d="M270 150 H530" stroke={ACC} strokeWidth="2.6" strokeDasharray="8 7" />
-      <rect x="330" y="96" width="140" height="34" rx="4" fill="#102129" stroke="#24404A" />
-      <text x="400" y="118" textAnchor="middle" fontFamily="monospace" fontSize="16" fill={ACC}>Δ 2.1 м · тип ✓</text>
-      <text x="400" y="270" textAnchor="middle" fontFamily="monospace" fontSize="16" fill="#9DBFA8">MATCHED · score 0.91 · объект не дублируется</text>
-    </svg>
+    <div style={{ padding: 'var(--sp-6)' }} role="img" aria-label="Сопоставление обнаружения с существующим объектом">
+      <div className="scenario-dedup">
+        <div className="scenario-dedup-node">
+          <span className="eyebrow">detection</span>
+          <span className="mono small">{fmtCoord(obs.longitude, obs.latitude)}</span>
+          <span className="muted small">{label.assetType(obs.object_type)} · {fmtPercent(obs.detector_confidence, 0)}</span>
+        </div>
+        <div className="scenario-dedup-link">
+          <span className="num small">Δ {fmtNumber(Number(e.distance_m ?? 0), 1)} м</span>
+          <span className="faint" style={{ fontSize: 'var(--text-micro)' }}>тип: совпадает</span>
+        </div>
+        <div className="scenario-dedup-node">
+          <span className="eyebrow">asset</span>
+          <span className="mono small">{fmtCoord(asset?.longitude, asset?.latitude)}</span>
+          <span className="muted small">{asset?.display_name ?? '—'}</span>
+        </div>
+      </div>
+      <div className="spec-row" style={{ justifyContent: 'center', marginTop: 'var(--sp-4)' }}>
+        <span className="num small">score {fmtNumber(obs.dedup_score ?? 0, 2)}</span>
+        <Status tone="ok" shape="square">matched</Status>
+        <span className="muted small">объект не дублируется</span>
+      </div>
+    </div>
   );
 }
 
-function HistoryVisual({ confirmed }: { confirmed: boolean | null }) {
+function HistoryVisual({ assetId, confirmed }: { assetId?: string | null; confirmed: boolean | null }) {
+  const entries = demoData.history
+    .filter((h) => h.asset_id === assetId)
+    .sort((a, b) => (a.detected_at ?? '').localeCompare(b.detected_at ?? ''));
   return (
-    <svg viewBox="0 0 800 300" role="img" aria-label="История состояния объекта">
-      <rect width="800" height="300" fill="#091318" />
-      <path d="M80 150 H720" stroke="#24404A" strokeWidth="3" />
-      <circle cx="140" cy="150" r="13" fill="#9DBFA8" />
-      <circle cx="400" cy="150" r="13" fill="#F0A45C" />
-      <circle cx="660" cy="150" r="13" fill={confirmed === false ? '#A0B3B5' : CRIT} />
-      <text x="140" y="110" textAnchor="middle" fontFamily="monospace" fontSize="15" fill="#A0B3B5">01.11 · ok · S1</text>
-      <text x="400" y="110" textAnchor="middle" fontFamily="monospace" fontSize="15" fill="#A0B3B5">10.11 · damaged_cover · S4</text>
-      <text x="660" y="110" textAnchor="middle" fontFamily="monospace" fontSize="15" fill="#A0B3B5">15.11 · missing_cover · S5</text>
-      <text x="140" y="196" textAnchor="middle" fontFamily="monospace" fontSize="13" fill="#7D959B">ML_PREDICTION</text>
-      <text x="400" y="196" textAnchor="middle" fontFamily="monospace" fontSize="13" fill="#7D959B">ML_PREDICTION</text>
-      <text x="660" y="196" textAnchor="middle" fontFamily="monospace" fontSize="13" fill="#7D959B">
-        {confirmed === false ? 'REJECTED · предсказание сохранено' : 'HUMAN_REVIEW · подтверждено'}
-      </text>
-      <text x="400" y="262" textAnchor="middle" fontFamily="monospace" fontSize="15" fill={ACC}>
-        append-only: исходные предсказания не затираются
-      </text>
-    </svg>
+    <div style={{ padding: 'var(--sp-6)' }} role="img" aria-label="История состояния объекта">
+      <div className="spec-timeline">
+        {entries.map((h) => (
+          <div className="spec-timeline-item" key={h.id}>
+            <i className={`spec-dot tone-${conditionTone(h.new_condition)}`} aria-hidden />
+            <div>
+              <div className="spec-row" style={{ padding: 0 }}>
+                <span className="mono small">{fmtDateTime(h.detected_at)}</span>
+                <span className="muted small">S{h.new_severity}</span>
+                {h.is_physical_change && <Status tone="warn" shape="diamond">физическое изменение</Status>}
+              </div>
+              <div className="small" style={{ marginTop: 4 }}>
+                {h.previous_condition && <span className="faint">{label.condition(h.previous_condition)} → </span>}
+                <Status tone={conditionTone(h.new_condition)}>{label.condition(h.new_condition)}</Status>
+              </div>
+              <span className="mono faint" style={{ fontSize: 'var(--text-micro)' }}>{label.changeSource(h.change_source)}</span>
+            </div>
+          </div>
+        ))}
+        <div className="spec-timeline-item">
+          <i className={`spec-dot tone-${confirmed === false ? 'neutral' : 'ok'}`} aria-hidden />
+          <div>
+            <div className="spec-row" style={{ padding: 0 }}>
+              <span className="mono small">решение оператора</span>
+            </div>
+            <div className="small" style={{ marginTop: 4 }}>
+              {confirmed === false ? (
+                <Status tone="neutral">REJECTED · предсказание сохранено</Status>
+              ) : (
+                <Status tone="ok">HUMAN_REVIEW · подтверждено</Status>
+              )}
+            </div>
+            <span className="mono faint" style={{ fontSize: 'var(--text-micro)' }}>append-only: исходные предсказания не затираются</span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -61,13 +93,14 @@ export default function Scenario() {
     [],
   );
   const asset = demoData.assets.find((a) => a.id === obs.asset_id);
+  const dedupDistance = ((obs.dedup_explanation ?? {}) as Record<string, unknown>).distance_m;
   const framePlain = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(demoFrameSvg(obs, false))}`, [obs]);
   const frameBbox = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(demoFrameSvg(obs, true))}`, [obs]);
 
   const steps = [
     { title: 'Кадр с маршрута', text: `Объезд «${demoData.routes[0].name}». Камера служебного автомобиля фиксирует уличную инфраструктуру; GPS-трек привязывает кадр к координатам.` },
     { title: 'Детекция и оценка', text: `Модель обнаруживает ${label.assetType(obs.object_type).toLowerCase()} и классифицирует состояние: ${label.condition(obs.condition_class)}. Уверенность детектора — ${fmtPercent(obs.detector_confidence, 0)}, тяжесть S${obs.severity}.` },
-    { title: 'Дедупликация', text: 'Система сравнивает обнаружение с реестром: расстояние 2.1 м, совпадение типа и состояния. Объект не дублируется — наблюдение привязывается к существующему Asset.' },
+    { title: 'Дедупликация', text: `Система сравнивает обнаружение с реестром: расстояние ${fmtNumber(Number(dedupDistance ?? 0), 1)} м, совпадение типа и состояния. Объект не дублируется — наблюдение привязывается к существующему Asset.` },
     { title: 'Карточка наблюдения', text: 'Формируется наблюдение: исходное предсказание, bbox в пикселях кадра, геопривязка, результат дедупликации. Запись ожидает проверки оператором.' },
     { title: 'Решение оператора', text: 'Оператор сравнивает кадр с предсказанием и принимает решение. Подтверждение обновляет состояние объекта; отклонение сохраняет предсказание, но не применяет его.' },
     { title: 'История состояния', text: 'Изменение фиксируется в истории с источником HUMAN_REVIEW. Между объездами состояние ухудшилось: damaged_cover → missing_cover. Это видно в паспорте объекта.' },
@@ -80,7 +113,7 @@ export default function Scenario() {
       case 1:
         return <img src={frameBbox} alt="Синтетический кадр с bbox детекции" />;
       case 2:
-        return <DedupVisual />;
+        return <DedupVisual obs={obs} asset={asset} />;
       case 3:
         return (
           <div style={{ padding: 'var(--sp-6)' }}>
@@ -122,7 +155,7 @@ export default function Scenario() {
           </div>
         );
       default:
-        return <HistoryVisual confirmed={decision} />;
+        return <HistoryVisual assetId={obs.asset_id} confirmed={decision} />;
     }
   };
 
@@ -153,7 +186,7 @@ export default function Scenario() {
         </nav>
 
         <div className="scenario-stage">
-          <div className="scenario-visual" key={step} style={{ animation: 'toast-in var(--dur-swap) var(--ease-out)' }}>
+          <div className="scenario-visual" key={step}>
             {visual()}
           </div>
           <div className="scenario-text">

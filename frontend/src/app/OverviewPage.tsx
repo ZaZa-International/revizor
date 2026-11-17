@@ -223,6 +223,7 @@ export default function OverviewPage() {
           </div>
           <div className="attention-list">
             {jobs.isPending && <LoadingState />}
+            {jobs.error && <ErrorState error={jobs.error} onRetry={() => jobs.refetch()} />}
             {jobs.data?.items.length === 0 && (
               <p className="muted small" style={{ padding: 'var(--sp-5)' }}>
                 Задач пока нет. Загрузите материалы в разделе «Задачи».

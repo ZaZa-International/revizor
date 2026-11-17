@@ -57,12 +57,12 @@ const ZONES = [
 ];
 
 function nodeShape(n: Node, opacity: number) {
-  const color = n.defect ? '#E66C61' : n.kind === 'cabinet' ? '#E9EEE9' : '#75D7CC';
+  const color = n.defect ? 'var(--crit)' : n.kind === 'cabinet' ? 'var(--ink)' : 'var(--accent)';
   const common = { opacity, style: { transition: 'opacity 200ms linear' } };
   if (n.kind === 'well') {
     return (
       <g {...common}>
-        <circle cx={n.x} cy={n.y} r={7} fill="#091318" stroke={color} strokeWidth={2.4} />
+        <circle cx={n.x} cy={n.y} r={7} fill="var(--bg)" stroke={color} strokeWidth={2.4} />
         <circle cx={n.x} cy={n.y} r={2.4} fill={color} />
       </g>
     );
@@ -70,14 +70,14 @@ function nodeShape(n: Node, opacity: number) {
   if (n.kind === 'cabinet') {
     return (
       <g {...common}>
-        <rect x={n.x - 6.5} y={n.y - 6.5} width={13} height={13} fill="#091318" stroke={color} strokeWidth={2.4} rx={2} />
+        <rect x={n.x - 6.5} y={n.y - 6.5} width={13} height={13} fill="var(--bg)" stroke={color} strokeWidth={2.4} rx={2} />
         <line x1={n.x} y1={n.y - 4} x2={n.x} y2={n.y + 4} stroke={color} strokeWidth={1.6} />
       </g>
     );
   }
   return (
     <g {...common}>
-      <path d={`M${n.x} ${n.y - 8} L${n.x + 7.5} ${n.y + 6} L${n.x - 7.5} ${n.y + 6} Z`} fill="#091318" stroke={color} strokeWidth={2.4} strokeLinejoin="round" />
+      <path d={`M${n.x} ${n.y - 8} L${n.x + 7.5} ${n.y + 6} L${n.x - 7.5} ${n.y + 6} Z`} fill="var(--bg)" stroke={color} strokeWidth={2.4} strokeLinejoin="round" />
     </g>
   );
 }
@@ -93,12 +93,12 @@ export default function NetworkSvg({ progress, className }: { progress: number; 
             key={i}
             d={e.d}
             fill="none"
-            stroke={i === EDGES.length - 1 ? '#2E5A54' : '#3D8A81'}
+            stroke="var(--accent-dim)"
             strokeWidth={i === EDGES.length - 1 ? 3 : 1.8}
             strokeDasharray={i === EDGES.length - 1 ? '10 8' : undefined}
             pathLength={1}
             strokeDashoffset={i === EDGES.length - 1 ? undefined : 1 - local}
-            opacity={i === EDGES.length - 1 ? local * 0.9 : 0.85}
+            opacity={i === EDGES.length - 1 ? local * 0.6 : 0.85}
             style={i === EDGES.length - 1 ? undefined : { strokeDasharray: 1 }}
           />
         );
@@ -107,8 +107,8 @@ export default function NetworkSvg({ progress, className }: { progress: number; 
         const local = Math.max(0, Math.min(1, (p - z.at) / 0.16));
         return (
           <g key={i} opacity={local}>
-            <rect x={z.x} y={z.y} width={z.w} height={z.h} fill="rgba(117,215,204,0.05)" stroke="#75D7CC" strokeWidth={1.2} strokeDasharray="6 6" rx={4} />
-            <text x={z.x + 10} y={z.y + 22} fontFamily="var(--font-mono)" fontSize={13} fill="#75D7CC" letterSpacing="0.1em">
+            <rect x={z.x} y={z.y} width={z.w} height={z.h} fill="var(--accent)" fillOpacity={0.05} stroke="var(--accent)" strokeWidth={1.2} strokeDasharray="6 6" rx={4} />
+            <text x={z.x + 10} y={z.y + 22} fontFamily="var(--font-mono)" fontSize={13} fill="var(--accent)" letterSpacing="0.1em">
               {z.label}
             </text>
           </g>
@@ -120,7 +120,7 @@ export default function NetworkSvg({ progress, className }: { progress: number; 
       })}
       {NODES.filter((n) => n.defect).map((n, i) => {
         const local = Math.max(0, Math.min(1, (p - n.at - 0.12) / 0.12));
-        return <circle key={`d${i}`} cx={n.x} cy={n.y} r={15} fill="none" stroke="#E66C61" strokeWidth={1.6} opacity={local * 0.9} strokeDasharray="4 4" />;
+        return <circle key={`d${i}`} cx={n.x} cy={n.y} r={15} fill="none" stroke="var(--crit)" strokeWidth={1.6} opacity={local * 0.9} strokeDasharray="4 4" />;
       })}
     </svg>
   );

@@ -17,20 +17,31 @@
 
 ## Шрифты (Google Fonts, SIL Open Font License 1.1)
 
-- **Oswald** — display. © Vernon Adams, Kalapi Gajjar, Cyreal. OFL 1.1.
-- **IBM Plex Sans** — интерфейс. © IBM Corp. OFL 1.1.
-- **JetBrains Mono** — данные. © JetBrains s.r.o. OFL 1.1.
+- **Oswald** — display (начертания 500/600). © Vernon Adams, Kalapi Gajjar, Cyreal. OFL 1.1.
+- **IBM Plex Sans** — интерфейс (400/500/600/700). © IBM Corp. OFL 1.1.
+- **JetBrains Mono** — данные (400/500/700). © JetBrains s.r.o. OFL 1.1.
 
 Файлы woff2 (subset cyrillic/cyrillic-ext/latin/latin-ext) получены через
-Google Fonts CSS API и хранятся локально. Тексты лицензий:
+Google Fonts CSS API и хранятся локально. Неиспользуемые начертания
+(Oswald 400/700) удалены из репозитория. Тексты лицензий:
 https://openfontlicense.org/open-font-license-official-text/
 
 ## Геоданные и демо
 
-- Базовая карта: raster-тайлы Esri World Dark Gray (`server.arcgisonline.com`),
-  © Esri, HERE, Garmin, FAO, NOAA, USGS. Бесплатно, без API-ключа. Используются
-  только в live-карте с атрибуцией; при недоступности — локальный схематичный SVG-режим
-  (координатная сетка, без выдуманной географии).
+- Базовая карта (основной режим): локальный векторный стиль
+  `public/styles/revizor-dark.json` (генератор `scripts/build-map-style.mjs`)
+  поверх тайлов OpenFreeMap (https://openfreemap.org, © OpenMapTiles,
+  © OpenStreetMap contributors, ODbL). Спрайты/глифы — OpenFreeMap.
+- Fallback базовой карты: raster-тайлы Esri World Dark Gray
+  (`server.arcgisonline.com`), © Esri, HERE, Garmin, FAO, NOAA, USGS.
+  Бесплатно, без API-ключа. При недоступности тайлов — локальный схематичный
+  SVG-режим (координатная сетка, без выдуманной географии). Атрибуция
+  отображается на карте и в футере showcase.
 - Демо-датасет `src/demo/` — синтетический, детерминированный, координаты
   условны (центр Москвы как демонстрационная зона). Маркируется DEMO в интерфейсе.
-- SVG-иллюстрации pipeline и кадра камеры — собственная графика проекта.
+- Демо-кадры (`src/demo/frames.ts`) — собственная синтетическая графика:
+  дневная уличная сцена с объектом в bbox, маркировка «DEMO · СИНТЕТИЧЕСКИЙ КАДР».
+  Реальных кадров обследования в репозитории нет; при появлении реальных
+  материалов demo-кадры заменяются через image_url/crop_url API.
+- Showcase pipeline показывает реальные UI-компоненты продукта на демо-данных
+  (specimens), декоративные SVG-иллюстрации стадий удалены.

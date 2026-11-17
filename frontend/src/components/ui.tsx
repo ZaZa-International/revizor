@@ -1,8 +1,10 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
+  type KeyboardEvent,
   type ReactNode,
 } from 'react';
 import { ApiError, errorMessage } from '../api/client';
@@ -185,21 +187,6 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   );
 }
 
-export function QueryState<T>({
-  query,
-  children,
-  empty,
-}: {
-  query: { isPending: boolean; error: unknown; data?: T; refetch: () => void };
-  children: (data: T) => ReactNode;
-  empty?: ReactNode;
-}) {
-  if (query.isPending) return <LoadingState />;
-  if (query.error) return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
-  if (query.data === undefined) return empty ?? <EmptyState title="Нет данных" />;
-  return <>{children(query.data)}</>;
-}
-
 /* ── Пагинация ─────────────────────────────────────── */
 export function Pagination({
   page,
@@ -257,13 +244,20 @@ export function Dialog({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (open && !el.open) el.showModal();
+    if (open && !el.open) {
+      el.showModal();
+      const first =
+        el.querySelector<HTMLElement>('.dialog-body input, .dialog-body select, .dialog-body textarea, .dialog-body button') ??
+        el.querySelector<HTMLElement>('.dialog-foot button');
+      (first ?? el).focus();
+    }
     if (!open && el.open) el.close();
   }, [open]);
   return (
     <dialog
       ref={ref}
       className="dialog"
+      tabIndex={-1}
       style={wide ? { width: 'min(860px, calc(100vw - 32px))' } : undefined}
       onClose={onClose}
       onCancel={(e) => {
@@ -302,10 +296,12 @@ export function toast(kind: ToastItem['kind'], text: string) {
 
 export function ToastStack() {
   const [items, setItems] = useState<ToastItem[]>([]);
+  const dismiss = useCallback((id: number) => {
+    setItems((prev) => prev.filter((x) => x.id !== id));
+  }, []);
   useEffect(() => {
     const listener: ToastListener = (t) => {
       setItems((prev) => [...prev.slice(-3), t]);
-      setTimeout(() => setItems((prev) => prev.filter((x) => x.id !== t.id)), 5200);
     };
     listeners.add(listener);
     return () => {
@@ -315,31 +311,81 @@ export function ToastStack() {
   return (
     <div className="toast-stack" aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} className={`toast toast-${t.kind}`}>
-          <span>{t.text}</span>
-        </div>
+        <Toast key={t.id} item={t} onDismiss={dismiss} />
       ))}
     </div>
   );
 }
 
-/* ── Вкладки ───────────────────────────────────────── */
+function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: (id: number) => void }) {
+  const [paused, setPaused] = useState(false);
+  const ttl = item.kind === 'error' ? 10_000 : 5_200;
+  const remaining = useRef(ttl);
+  useEffect(() => {
+    if (paused) return;
+    const started = Date.now();
+    const timer = setTimeout(() => onDismiss(item.id), remaining.current);
+    return () => {
+      clearTimeout(timer);
+      remaining.current = Math.max(0, remaining.current - (Date.now() - started));
+    };
+  }, [paused, item.id, onDismiss]);
+  return (
+    <div
+      className={`toast toast-${item.kind}`}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <span>{item.text}</span>
+      <button className="toast-close" onClick={() => onDismiss(item.id)} aria-label="Закрыть уведомление">
+        <IconClose className="icon-sm" />
+      </button>
+    </div>
+  );
+}
+
+/* ── Вкладки (WAI-ARIA: roving tabindex + arrow keys) ── */
 export function Tabs({
   tabs,
   active,
   onChange,
+  idBase,
 }: {
   tabs: { id: string; label: string; count?: number }[];
   active: string;
   onChange: (id: string) => void;
+  idBase: string;
 }) {
+  const refs = useRef(new Map<string, HTMLButtonElement>());
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const idx = tabs.findIndex((t) => t.id === active);
+    if (idx < 0) return;
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabs.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    onChange(tabs[next].id);
+    refs.current.get(tabs[next].id)?.focus();
+  };
   return (
-    <div className="tabs" role="tablist">
+    <div className="tabs" role="tablist" onKeyDown={onKeyDown}>
       {tabs.map((t) => (
         <button
           key={t.id}
+          ref={(el) => {
+            if (el) refs.current.set(t.id, el);
+            else refs.current.delete(t.id);
+          }}
           role="tab"
+          id={`${idBase}-tab-${t.id}`}
           aria-selected={active === t.id}
+          aria-controls={`${idBase}-panel-${t.id}`}
+          tabIndex={active === t.id ? 0 : -1}
           className="tab"
           onClick={() => onChange(t.id)}
         >

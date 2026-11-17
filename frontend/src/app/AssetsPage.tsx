@@ -54,11 +54,16 @@ export default function AssetsPage() {
   const th = (field: string, title: string) => (
     <th
       className={SORTABLE.includes(field) ? 'sortable' : undefined}
-      onClick={() => toggleSort(field)}
       aria-sort={sortBy === field ? (order === 'desc' ? 'descending' : 'ascending') : undefined}
     >
-      {title}
-      {sortBy === field && <span className="sort-arrow">{order === 'desc' ? '↓' : '↑'}</span>}
+      {SORTABLE.includes(field) ? (
+        <button type="button" className="th-sort" onClick={() => toggleSort(field)}>
+          {title}
+          {sortBy === field && <span className="sort-arrow">{order === 'desc' ? '↓' : '↑'}</span>}
+        </button>
+      ) : (
+        title
+      )}
     </th>
   );
 

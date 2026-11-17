@@ -24,7 +24,7 @@ export default function DigitalTwin() {
 
   const liveAssets = useMapAssets({ limit: 1000 }, { enabled: live });
   const liveDefects = useMapDefects({}, { enabled: live });
-  const liveRoutes = useMapRoutes({ enabled: live });
+  const liveRoutes = useMapRoutes({}, { enabled: live });
 
   const demoAssets = useQuery({ queryKey: ['showcase-demo-assets'], queryFn: () => demoProvider.mapAssets({}), enabled: !live, staleTime: Infinity });
   const demoDefects = useQuery({ queryKey: ['showcase-demo-defects'], queryFn: () => demoProvider.mapDefects({}), enabled: !live, staleTime: Infinity });

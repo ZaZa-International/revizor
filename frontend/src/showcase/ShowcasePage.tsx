@@ -8,6 +8,7 @@ import Scenario from './scenes/Scenario';
 import PlatformPreview from './scenes/PlatformPreview';
 import FinalCta from './scenes/FinalCta';
 import { useShowcaseData } from './useShowcaseData';
+import { demoData } from '../demo/data';
 import { IconArrowRight } from '../components/icons';
 
 export default function ShowcasePage() {
@@ -22,9 +23,9 @@ export default function ShowcasePage() {
   }, []);
 
   const stats = {
-    assets: overview?.assets_total ?? (live ? 0 : 18),
-    observations: overview?.observations_total ?? (live ? 0 : 34),
-    defects: overview?.defects_total ?? (live ? 0 : 12),
+    assets: overview?.assets_total ?? (live ? 0 : demoData.assets.length),
+    observations: overview?.observations_total ?? (live ? 0 : demoData.observations.length),
+    defects: overview?.defects_total ?? (live ? 0 : demoData.defects.length),
     demo: !live,
   };
 

@@ -1,6 +1,6 @@
-/* SVG-визуализации данных: без chart-библиотек, с осями, подписями и единицами.
-   Цвет задаётся вызывающей стороной по семантике состояния. */
-import { useId } from 'react';
+/* SVG/HTML-визуализации данных: без chart-библиотек, с осями, подписями и единицами.
+   Цвет задаётся вызывающей стороной по семантике состояния.
+   Подписи — обычный HTML-текст (не масштабируются вместе с графиком). */
 import { fmtNumber } from '../lib/format';
 
 export interface Datum {
@@ -45,7 +45,7 @@ export function HBarList({ data, unit = 'объектов', max }: { data: Datum
   );
 }
 
-/* Вертикальная гистограмма с осью Y */
+/* Вертикальная гистограмма: ось Y от нуля, HTML-подписи нормального кегля */
 export function ColumnChart({
   data,
   height = 160,
@@ -57,74 +57,56 @@ export function ColumnChart({
   unit?: string;
   ariaLabel: string;
 }) {
-  const gid = useId();
+  if (data.length === 0) return <p className="muted small">Нет данных.</p>;
+  const total = data.reduce((s, d) => s + d.value, 0);
+  if (total === 0) return <p className="muted small">Нет данных за период.</p>;
   const peak = Math.max(1, ...data.map((d) => d.value));
-  const ticks = [0, 0.5, 1].map((t) => Math.round(peak * t));
-  const w = 100;
-  const gl = 12;
-  const plotW = w - gl;
-  const bw = plotW / Math.max(1, data.length);
+  const ticks = [1, 0.5, 0].map((t) => ({ pct: t * 100, value: Math.round(peak * t) }));
+  const labelEvery = data.length > 12 ? 2 : 1;
   return (
     <figure style={{ margin: 0 }}>
-      <svg viewBox={`0 0 ${w} ${height}`} style={{ width: '100%', height }} role="img" aria-label={ariaLabel} preserveAspectRatio="none">
-        {ticks.map((t, i) => {
-          const y = height - 22 - (t / peak) * (height - 34);
-          return (
-            <g key={i}>
-              <line x1={gl} x2={w} y1={y} y2={y} stroke="var(--line-soft)" strokeWidth={0.4} />
-              <text x={gl - 2} y={y - 1.5} fontSize={4.4} fill="var(--faint)" fontFamily="var(--font-mono)" textAnchor="end">
-                {fmtNumber(t)}
-              </text>
-            </g>
-          );
-        })}
-        {data.map((d, i) => {
-          const h = (d.value / peak) * (height - 34);
-          const x = gl + i * bw + bw * 0.18;
-          return (
-            <g key={`${gid}-${d.key}`}>
-              <rect x={x} y={height - 22 - h} width={bw * 0.64} height={Math.max(0.5, h)} fill={d.color ?? 'var(--accent)'} rx={0.8} />
-              <text x={gl + i * bw + bw / 2} y={height - 12} fontSize={4.6} fill="var(--muted)" textAnchor="middle" fontFamily="var(--font-mono)">
-                {d.label}
-              </text>
-              <text x={gl + i * bw + bw / 2} y={height - 25 - h} fontSize={4.6} fill="var(--ink)" textAnchor="middle" fontFamily="var(--font-mono)">
-                {d.value > 0 ? fmtNumber(d.value) : ''}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+      <div className="col-chart" role="img" aria-label={ariaLabel}>
+        <div className="col-chart-yaxis" style={{ height: height - 16 }} aria-hidden>
+          {ticks.map((t) => (
+            <span key={t.pct} className="col-chart-tick num" style={{ bottom: `${t.pct}%` }}>
+              {fmtNumber(t.value)}
+            </span>
+          ))}
+        </div>
+        <div className="col-chart-area" style={{ height: height - 16 }}>
+          {ticks.map((t) => (
+            <i key={t.pct} className="col-chart-gridline" style={{ bottom: `${t.pct}%` }} aria-hidden />
+          ))}
+          <div className="col-chart-bars">
+            {data.map((d) => {
+              const pct = (d.value / peak) * 100;
+              return (
+                <div key={d.key} className="col-chart-barwrap" title={`${d.label}: ${fmtNumber(d.value)}`}>
+                  {d.value > 0 && (
+                    <span className="col-chart-val num" style={{ bottom: `calc(${pct}% + 3px)` }}>
+                      {fmtNumber(d.value)}
+                    </span>
+                  )}
+                  <i className="col-chart-bar" style={{ height: `${pct}%`, background: d.color ?? 'var(--accent)' }} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="col-chart-xaxis" aria-hidden>
+          {data.map((d, i) => (
+            <span key={d.key} className="col-chart-xlabel mono">
+              {i % labelEvery === 0 ? d.label : ''}
+            </span>
+          ))}
+        </div>
+      </div>
       {unit && (
         <figcaption className="faint" style={{ fontSize: 'var(--text-micro)', marginTop: 4 }}>
           единицы: {unit}
         </figcaption>
       )}
     </figure>
-  );
-}
-
-/* Sparkline (тренд без осей, для компактных сводок) */
-export function Sparkline({
-  values,
-  width = 120,
-  height = 32,
-  color = 'var(--accent)',
-  ariaLabel,
-}: {
-  values: number[];
-  width?: number;
-  height?: number;
-  color?: string;
-  ariaLabel: string;
-}) {
-  if (values.length < 2) return <span className="faint small">—</span>;
-  const peak = Math.max(1, ...values);
-  const pts = values.map((v, i) => `${(i / (values.length - 1)) * width},${height - 3 - (v / peak) * (height - 6)}`);
-  return (
-    <svg width={width} height={height} role="img" aria-label={ariaLabel}>
-      <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth={1.6} strokeLinejoin="round" />
-      <circle cx={pts[pts.length - 1].split(',')[0]} cy={pts[pts.length - 1].split(',')[1]} r={2.2} fill={color} />
-    </svg>
   );
 }
 
@@ -185,7 +167,8 @@ export function CoverageGrid({
               width={cw - 1}
               height={cw - 1}
               rx={1}
-              fill={n === 0 ? 'var(--raised)' : `rgba(117, 215, 204, ${alpha})`}
+              fill={n === 0 ? 'var(--raised)' : 'var(--accent)'}
+              fillOpacity={n === 0 ? 1 : alpha}
             >
               <title>{`ячейка ${cx},${cy}: ${n} наблюдений`}</title>
             </rect>

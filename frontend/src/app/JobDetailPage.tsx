@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useJob, useJobAction, useJobFrames } from '../data/hooks';
-import { Badge, Button, EmptyState, ErrorState, KeyValue, LoadingState, Pagination, Progress, Status, toast } from '../components/ui';
+import { Badge, Button, Dialog, EmptyState, ErrorState, KeyValue, LoadingState, Pagination, Progress, Status, toast } from '../components/ui';
 import { IconChevronLeft } from '../components/icons';
 import { jobStatusTone, label } from '../lib/labels';
 import { fmtDateTime, fmtNumber } from '../lib/format';
@@ -21,6 +21,7 @@ export default function JobDetailPage() {
   const retry = useJobAction('retry');
   const cancel = useJobAction('cancel');
   const [framePage, setFramePage] = useState(1);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const frames = useJobFrames(id, framePage);
 
   if (job.isPending) return <LoadingState label="Загрузка задачи…" />;
@@ -61,7 +62,7 @@ export default function JobDetailPage() {
             <Button loading={retry.isPending} onClick={() => void act('retry')}>Перезапустить</Button>
           )}
           {canMutate && active && (
-            <Button variant="danger" loading={cancel.isPending} onClick={() => void act('cancel')}>Отменить</Button>
+            <Button variant="danger" loading={cancel.isPending} onClick={() => setConfirmCancel(true)}>Отменить</Button>
           )}
         </div>
       </div>
@@ -176,6 +177,32 @@ export default function JobDetailPage() {
           </>
         )}
       </section>
+
+      <Dialog
+        open={confirmCancel}
+        onClose={() => setConfirmCancel(false)}
+        title="Отменить задачу?"
+        footer={
+          <>
+            <Button onClick={() => setConfirmCancel(false)}>Не отменять</Button>
+            <Button
+              variant="danger"
+              loading={cancel.isPending}
+              onClick={() => {
+                setConfirmCancel(false);
+                void act('cancel');
+              }}
+            >
+              Отменить задачу
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Обработка кадров будет остановлена. Уже обработанные кадры и наблюдения сохранятся;
+          незавершённые кадры можно будет обработать повторным запуском (идемпотентно).
+        </p>
+      </Dialog>
     </div>
   );
 }
